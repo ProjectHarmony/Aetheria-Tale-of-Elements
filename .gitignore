@@ -1,0 +1,53 @@
+# ============================================================
+# Two Elements — app/ .gitignore
+# Vite + React + TypeScript + Tailwind project (node_modules, build
+# output, generated PWA service-worker artifacts).
+# ============================================================
+
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Build output ---
+dist/
+dist-ssr/
+dev-dist/
+*.local
+
+# --- Generated PWA/service-worker files (vite-plugin-pwa/workbox output,
+# regenerated on every build — don't hand-edit or commit) ---
+sw.js
+workbox-*.js
+registerSW.js
+
+# --- Logs ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Editor / IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+
+# --- TypeScript build info ---
+*.tsbuildinfo

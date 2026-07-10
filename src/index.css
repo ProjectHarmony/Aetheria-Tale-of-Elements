@@ -1,0 +1,211 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Manrope:wght@500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------------
+   PASTEL THEME — a deliberate shift away from the original's moody dark-
+   fantasy saturated palette toward something softer and more "appetizing":
+   candy-sky pastel background scenery + darker glass UI chrome on top
+   (keeps white text legible while the world itself feels light and warm).
+   Kept as CSS custom properties, not Tailwind theme keys, so element colors
+   can still be looked up dynamically by string key (ELEMENT_META[el].color)
+   from TS exactly like before.
+   ------------------------------------------------------------------------ */
+:root {
+  --color-fire: #ffab91;
+  --color-fire-glow: #ffd4bf;
+  --color-water: #8ed8f8;
+  --color-water-glow: #c8efff;
+  --color-earth: #a8e6a1;
+  --color-earth-glow: #d4f5d0;
+  --color-wind: #c9aeff;
+  --color-wind-glow: #e4d6ff;
+  --color-gold: #ffd98e;
+  --color-gold-deep: #4a2f1f;
+  --color-danger: #ff8fa3;
+  --color-success: #7ee8b8;
+  --color-ink: #2c1f3d;
+
+  /* UI chrome: dark-glass panels so text stays legible over the pastel sky */
+  /* Deliberately opaque enough to guarantee text contrast on its own —
+     backdrop-blur is a nice-to-have polish layer, not something legibility
+     should depend on (devices/browsers without backdrop-filter support
+     would otherwise show near-white text almost directly on the bright
+     pastel sky behind it). */
+  --panel-bg: rgba(36, 24, 52, 0.88);
+  --panel-border: rgba(255, 255, 255, 0.18);
+
+  /* The living pastel sky/ground scenery — animated, see .pastel-sky below */
+  --sky-a: #e9c9f7;
+  --sky-b: #ffd6e8;
+  --sky-c: #cdf3e0;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: #1a1330;
+  font-family: 'Manrope', system-ui, sans-serif;
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+
+/* Slow-drifting pastel sky gradient — the "animation colors" ask: the world
+   itself is alive, not a static backdrop. Subtle enough not to distract
+   from gameplay (16s loop, gentle position drift only). */
+@keyframes pastelSkyDrift {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 100% 40%; }
+}
+.pastel-sky {
+  background-image:
+    radial-gradient(ellipse 80% 55% at 20% 0%, color-mix(in srgb, var(--sky-a) 55%, transparent), transparent 65%),
+    radial-gradient(ellipse 80% 55% at 85% 10%, color-mix(in srgb, var(--sky-b) 55%, transparent), transparent 65%),
+    linear-gradient(180deg, #efe0fb 0%, #ffe3ef 32%, #fff1de 52%, #d9f3d0 72%, #bfe8c4 100%);
+  background-size: 160% 160%;
+  animation: pastelSkyDrift 18s ease-in-out infinite;
+}
+
+/* Shimmering conic border for ultimate-tier cards / the Attack CTA —
+   rotates continuously, reads as "this one is special/charged". */
+@keyframes shimmerRotate {
+  to { transform: rotate(360deg); }
+}
+.shimmer-border {
+  position: relative;
+  isolation: isolate;
+}
+.shimmer-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, var(--color-fire), var(--color-gold), var(--color-earth), var(--color-water), var(--color-wind), var(--color-fire));
+  animation: shimmerRotate 4s linear infinite;
+  opacity: 0.85;
+}
+
+/* Gentle animated gradient shift for the primary CTA — a "living" gradient
+   instead of a static one, moves lazily left-right. */
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradientShift 6s ease infinite;
+}
+
+/* ------------------------------------------------------------------------
+   BATTLE LAYOUT — mobile stacks everything in a single column (DOM order
+   IS the visual order: topbar, field, sidebar-stuff, hand). Desktop
+   reflows the exact same DOM into a grid — battlefield gets the big left
+   column, the resource/log/plan-prompt cluster becomes a real sidebar, and
+   the hand spans the bottom with more room for bigger cards. Single DOM
+   tree throughout: nothing double-mounts, only the layout algorithm changes
+   at the breakpoint, so BattleScreen's live store subscriptions/timers are
+   never duplicated. */
+.battle-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+/* `.bl-field` MUST be a shrinkable flex item on mobile too, not just inside
+   the desktop grid below — otherwise it has no height ceiling at all and
+   grows to fit its own content (the hero cards), which can push the hand/
+   CTA bar (Pass/Attack) off the bottom of the screen entirely once cards
+   get bigger. `min-height: 0` overrides flexbox's default `min-height:
+   auto`, which is what actually caused the overflow. */
+.battle-layout > .bl-field {
+  display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden;
+}
+@media (min-width: 1024px) {
+  .battle-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      'topbar topbar'
+      'field sidebar'
+      'hand hand';
+    height: 100%;
+  }
+  .battle-layout > .bl-topbar { grid-area: topbar; }
+  .battle-layout > .bl-field { grid-area: field; }
+  .battle-layout > .bl-sidebar {
+    grid-area: sidebar; display: flex; flex-direction: column; gap: 12px; padding: 16px;
+    overflow-y: auto; border-left: 1px solid var(--panel-border); background: rgba(0,0,0,0.10);
+  }
+  .battle-layout > .bl-sidebar > * { margin: 0 !important; width: 100%; }
+  .battle-layout > .bl-hand { grid-area: hand; }
+}
+
+/* ------------------------------------------------------------------------
+   WORLD MAP MODAL — the illustrated Aetheria atlas art, scrolled/dragged
+   like a real map; pins are a pure progress overlay (location names/icons
+   are already drawn into the art itself).
+   ------------------------------------------------------------------------ */
+.wm-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 9px; color: rgba(255,255,255,0.5); justify-content: center; margin-bottom: 10px; }
+.wm-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.wm-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.wm-scroll {
+  overflow: auto; max-height: 56vh; border-radius: 14px; background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.1); -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y;
+  cursor: grab;
+}
+.wm-art-canvas { position: relative; }
+
+.wm-pin {
+  position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; z-index: 4;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.wm-pin-unexplored { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); }
+.wm-pin-visited { background: rgba(255,255,255,0.85); }
+.wm-pin-here {
+  width: 14px; height: 14px; margin: -7px; background: var(--color-gold); z-index: 6;
+  animation: wmHerePulse 1.6s ease-in-out infinite;
+}
+@keyframes wmHerePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,200,80,0.5); }
+  50% { box-shadow: 0 0 0 7px rgba(255,200,80,0); }
+}
+
+.wm-here-pin {
+  position: absolute; top: -22px; left: 50%; transform: translateX(-50%); z-index: 9; white-space: nowrap;
+  font-size: 8px; font-weight: 800; color: var(--color-gold-deep); background: var(--color-gold);
+  padding: 2px 6px; border-radius: 100px; box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  animation: wmPinBob 1.6s ease-in-out infinite;
+}
+.wm-here-pin::after {
+  content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+  border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 4px solid var(--color-gold);
+}
+@keyframes wmPinBob { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-3px); } }
+
+/* Map transition veil — fast fade-to-black on portal use. Input stays
+   locked for the whole duration (mapStore.locked), so this doubles as
+   visual confirmation the game isn't ignoring input, just mid-transition. */
+.map-transition-veil {
+  position: absolute; inset: 0; z-index: 95; background: #050308; opacity: 0; pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.map-transition-veil.show { opacity: 1; }
+
+.map-area-banner {
+  position: absolute; top: 34%; left: 50%; transform: translate(-50%,-50%) scale(0.94); z-index: 96;
+  text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.map-area-banner.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }

@@ -1,0 +1,42 @@
+import type { ReactNode } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useGameStore } from '@/stores/gameStore';
+import { AuthPage } from '@/features/auth';
+import { RosterPage } from '@/features/roster';
+import { HubPage } from '@/features/hub';
+import { PartyPage } from '@/features/party';
+import { MapPage } from '@/features/map';
+import { BattlePage } from '@/pages/BattlePage';
+import { ResponsiveShell } from '@/layouts/ResponsiveShell';
+
+function RequireAccount({ children }: { children: ReactNode }) {
+  const user = useGameStore((s) => s.user);
+  if (!user) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
+
+function RequireParty({ children }: { children: ReactNode }) {
+  const user = useGameStore((s) => s.user);
+  const party = useGameStore((s) => s.party);
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!party) return <Navigate to="/roster" replace />;
+  return <>{children}</>;
+}
+
+/** Route table for the whole game — every screen from the original is now
+ *  a sibling route, each backed by its own feature module (src/features/*). */
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/auth" element={<ResponsiveShell><AuthPage /></ResponsiveShell>} />
+        <Route path="/roster" element={<RequireAccount><ResponsiveShell><RosterPage /></ResponsiveShell></RequireAccount>} />
+        <Route path="/hub" element={<RequireParty><ResponsiveShell><HubPage /></ResponsiveShell></RequireParty>} />
+        <Route path="/party" element={<RequireParty><ResponsiveShell><PartyPage /></ResponsiveShell></RequireParty>} />
+        <Route path="/map" element={<RequireParty><ResponsiveShell><MapPage /></ResponsiveShell></RequireParty>} />
+        <Route path="/battle" element={<BattlePage />} />
+        <Route path="*" element={<Navigate to="/auth" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
