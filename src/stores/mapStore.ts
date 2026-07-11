@@ -169,7 +169,7 @@ export const useMapStore = create<MapStore>()(
         set({ pendingEncounter: true, locked: true, activeEncounter: { mapId, slots: group.map((r) => r.slot), names: group.map((r) => r.name) } });
       },
 
-      clearEncounter: () => set({ pendingEncounter: false, locked: false }),
+      clearEncounter: () => set({ pendingEncounter: false, locked: false, joyVec: { x: 0, y: 0 } }),
 
       // Called once, right after returning from an adventure battle. A win
       // starts each defeated roamer's respawn cooldown (or, for a Boss,
@@ -201,6 +201,13 @@ export const useMapStore = create<MapStore>()(
             mapId: HUB_MAP_ID,
             playerPos: hub ? { x: hub.w / 2, y: hub.h / 2 } : { x: 750, y: 750 },
             roamers: hub ? resolveRoamers(hub, respawnAt, bossDefeatedAt) : [],
+            // Whatever direction was held the instant the encounter
+            // triggered (e.g. walking into the roamer) otherwise sits in
+            // the store, untouched, for the whole fight — tick() just
+            // skips consuming it while locked/pendingEncounter, not clears
+            // it — so the player would start sliding in that stale
+            // direction the moment they're back, with no input at all.
+            joyVec: { x: 0, y: 0 },
           });
           return;
         }
@@ -211,6 +218,7 @@ export const useMapStore = create<MapStore>()(
           pendingEncounter: false,
           locked: false,
           roamers: map ? resolveRoamers(map, respawnAt, bossDefeatedAt) : [],
+          joyVec: { x: 0, y: 0 },
         });
       },
     }),

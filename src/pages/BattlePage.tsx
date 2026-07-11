@@ -31,7 +31,7 @@ export function BattlePage() {
       const { heroes: players, runtimeCards } = buildPlayerTeamFromParty(party);
       const level = avgPartyLevel(party);
       if (battleContext === 'adventure' && activeEncounter) {
-        const { enemies, xpReward, dmgScale } = buildEncounterEnemyTeam(activeEncounter.names);
+        const { enemies, xpReward, dmgScale } = buildEncounterEnemyTeam(activeEncounter.names, level);
         xpRewardRef.current = xpReward;
         startBattle(players, enemies, runtimeCards, dmgScale);
       } else {

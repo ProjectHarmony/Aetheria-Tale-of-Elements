@@ -1,75 +1,90 @@
-import type { ComputedMonsterStats, MonsterRole, MonsterTier } from '@/types';
+import type { ComputedMonsterStats, Element, MonsterRole, MonsterTier } from '@/types';
+import { HERO_ACC, HERO_CRIT, HERO_DODGE, HERO_HP, SPEED, STAT_SCALE } from './heroes';
+import { STAT_POINTS_PER_LEVEL } from './rules';
 
 /**
- * Aetheria Monster Database — "shortened coding" stat system, ported as a
- * live formula (not baked per-monster numbers) so retuning one multiplier
- * here still updates every monster that uses it, exactly like the source
- * workbook's own design goal. See `Aetheria_Monster-Database-v5.xlsx`:
- * README + Base Curve + Role Profiles + Tier Settings sheets.
+ * Aetheria Monster Database — monsters now use the EXACT SAME stat system
+ * players do: the 6 categories (Power/Cast Speed/Vital/Dodge/Crit/Accuracy),
+ * converted onto the same per-element base curve players use (HERO_HP,
+ * SPEED, HERO_DODGE, HERO_CRIT, HERO_ACC) via the identical STAT_SCALE
+ * conversion factors. A monster's Level earns a stat-point pool at the same
+ * rate a player earns points (STAT_POINTS_PER_LEVEL/level) — a Lv15 monster
+ * gets 15 * 5 = 75 points, exactly what a Lv15 PLAYER would have earned
+ * from leveling. This directly fixes the old curve-based system's core
+ * problem: player power is almost entirely level-INDEPENDENT (a mage's HP
+ * barely moves unless points are deliberately spent), so a Lv1 party could
+ * steamroll a Lv25+ monster scaling on a totally different, hand-tuned
+ * curve. Now monster and player power are the SAME formula — a same-level,
+ * similarly-invested monster and player are directly comparable.
+ *
+ * Points are split across the 6 categories per ROLE, not evenly — a Tank
+ * invests mostly in Vital, an Assassin in Crit + Cast Speed, a Healer in
+ * Vital + Cast Speed (stays alive long enough to keep healing), etc. — see
+ * ROLE_STAT_WEIGHTS. Tier (and, for population-pyramid monsters, Adult/Elder
+ * — see monsterRoster.ts) then scale the TOTAL pool before it's split, so a
+ * tougher tier reads as "a more developed specimen" with proportionally
+ * better everything, not a bare damage-sponge multiplier bolted on after.
  */
 
-// ============================================================
-// BASE CURVE — Regular-tier, role-neutral per-level stat curve.
-// ============================================================
-const BASE_CURVE = {
-  hp: { base: 80, growth: 14 },
-  dmg: { base: 12, growth: 2.2 },
-  speed: { base: 90, growth: 0.3 },
-  accuracy: { base: 85, growth: 0.12, cap: 97 },
-  dodge: { base: 5, growth: 0.35, cap: 35 },
-  crit: { base: 5, growth: 0.28, cap: 30 },
+/** Reference damage a monster's kit scales from — matches a fresh player's
+ *  own Root-skill damage (e.g. Ember's Spark, 60 DMG at rank 1), so a
+ *  monster's POW investment scales its output exactly like a player's does. */
+const BASE_MONSTER_DMG = 60;
+
+interface RoleStatWeights { pow: number; cs: number; vit: number; dge: number; crt: number; acc: number }
+
+/** Each role's point split — weights sum to 1.0, i.e. "what this archetype
+ *  would actually invest in" given a free pool, same as a player choosing
+ *  where to put their own stat points. */
+export const ROLE_STAT_WEIGHTS: Record<MonsterRole, RoleStatWeights> = {
+  'Tank': { vit: 0.45, pow: 0.20, acc: 0.15, cs: 0.10, dge: 0.05, crt: 0.05 },
+  'Tactician': { cs: 0.25, acc: 0.25, pow: 0.20, vit: 0.15, dge: 0.10, crt: 0.05 },
+  'Healer': { vit: 0.35, cs: 0.30, acc: 0.15, pow: 0.10, dge: 0.05, crt: 0.05 },
+  'Damager': { pow: 0.40, acc: 0.20, vit: 0.20, cs: 0.10, crt: 0.05, dge: 0.05 },
+  // Assassin/Burst/both AoE roles simulated as unconditional losses at their
+  // original, more offense-concentrated weights (crt/pow ~0.30-0.40 each) —
+  // AoE roles hit all 3 party members per cast (a real x3 amplifier once the
+  // AoE-targeting bug was fixed), and Assassin/Burst's crit+pow concentration
+  // compounds with their own skill kit's dmgMult (e.g. Burst's Overload,
+  // 1.6x). Re-weighted toward Vital so these roles stay dangerous without
+  // being unwinnable — verified via headless battle-engine simulation.
+  'Assassin': { crt: 0.20, cs: 0.20, pow: 0.20, vit: 0.25, acc: 0.10, dge: 0.05 },
+  'AoE Controller': { acc: 0.25, cs: 0.20, vit: 0.35, pow: 0.10, dge: 0.05, crt: 0.05 },
+  'AoE Damager': { pow: 0.25, vit: 0.35, acc: 0.20, cs: 0.10, dge: 0.05, crt: 0.05 },
+  'Dodger': { dge: 0.40, cs: 0.25, crt: 0.15, pow: 0.10, acc: 0.05, vit: 0.05 },
+  'Burst': { crt: 0.20, pow: 0.20, vit: 0.35, cs: 0.10, acc: 0.10, dge: 0.05 },
+  'Accuracy': { acc: 0.45, pow: 0.20, crt: 0.15, cs: 0.10, vit: 0.05, dge: 0.05 },
 };
 
-// ============================================================
-// ROLE PROFILES — the only place Role balance is tuned; every monster of a
-// given Role inherits these multipliers (+ element counter-depth) automatically.
-// ============================================================
-interface RoleProfile {
-  hpMult: number;
-  dmgMult: number;
-  speedMult: number;
-  dodgeMult: number;
-  critMult: number;
-  accMult: number;
-  elementLevel: number;
-  elementResistLevel: number;
-}
-
-export const ROLE_PROFILES: Record<MonsterRole, RoleProfile> = {
-  'Tank': { hpMult: 1.4, dmgMult: 0.7, speedMult: 0.85, dodgeMult: 0.8, critMult: 0.7, accMult: 0.9, elementLevel: 1, elementResistLevel: 4 },
-  'Tactician': { hpMult: 1, dmgMult: 0.85, speedMult: 1, dodgeMult: 1, critMult: 0.9, accMult: 1.1, elementLevel: 2, elementResistLevel: 3 },
-  'Healer': { hpMult: 1.1, dmgMult: 0.6, speedMult: 0.95, dodgeMult: 0.9, critMult: 0.7, accMult: 1, elementLevel: 2, elementResistLevel: 3 },
-  'Damager': { hpMult: 1, dmgMult: 1.15, speedMult: 1, dodgeMult: 0.9, critMult: 1, accMult: 1, elementLevel: 3, elementResistLevel: 2 },
-  'Assassin': { hpMult: 0.75, dmgMult: 1.35, speedMult: 1.25, dodgeMult: 1.1, critMult: 1.3, accMult: 1, elementLevel: 4, elementResistLevel: 1 },
-  'AoE Controller': { hpMult: 0.95, dmgMult: 0.9, speedMult: 0.95, dodgeMult: 0.9, critMult: 0.85, accMult: 1.15, elementLevel: 2, elementResistLevel: 2 },
-  'AoE Damager': { hpMult: 0.9, dmgMult: 1.1, speedMult: 0.9, dodgeMult: 0.85, critMult: 0.95, accMult: 1, elementLevel: 3, elementResistLevel: 1 },
-  'Dodger': { hpMult: 0.85, dmgMult: 0.9, speedMult: 1.2, dodgeMult: 1.5, critMult: 1, accMult: 0.95, elementLevel: 3, elementResistLevel: 2 },
-  'Burst': { hpMult: 0.85, dmgMult: 1.4, speedMult: 1.05, dodgeMult: 0.9, critMult: 1.2, accMult: 0.95, elementLevel: 4, elementResistLevel: 2 },
-  'Accuracy': { hpMult: 0.95, dmgMult: 1.05, speedMult: 1, dodgeMult: 0.85, critMult: 1.05, accMult: 1.35, elementLevel: 2, elementResistLevel: 3 },
+/** Element counter-depth stays Role-derived — unrelated to the 6-stat point
+ *  system, this is a separate exposure/resistance axis (see netCounterMult). */
+interface RoleElementProfile { elementLevel: number; elementResistLevel: number }
+export const ROLE_ELEMENT_PROFILES: Record<MonsterRole, RoleElementProfile> = {
+  'Tank': { elementLevel: 1, elementResistLevel: 4 },
+  'Tactician': { elementLevel: 2, elementResistLevel: 3 },
+  'Healer': { elementLevel: 2, elementResistLevel: 3 },
+  'Damager': { elementLevel: 3, elementResistLevel: 2 },
+  'Assassin': { elementLevel: 4, elementResistLevel: 1 },
+  'AoE Controller': { elementLevel: 2, elementResistLevel: 2 },
+  'AoE Damager': { elementLevel: 3, elementResistLevel: 1 },
+  'Dodger': { elementLevel: 3, elementResistLevel: 2 },
+  'Burst': { elementLevel: 4, elementResistLevel: 2 },
+  'Accuracy': { elementLevel: 2, elementResistLevel: 3 },
 };
 
-// ============================================================
-// TIER SETTINGS — HP/Dmg multipliers apply on TOP of the Role profile
-// (Speed/Accuracy/Dodge/Crit are Role-only, no Tier scaling).
-// ============================================================
-interface TierProfile {
-  hpMult: number;
-  dmgMult: number;
-  respawnMs: number;
-}
-
+/** Tier is now a POINTS multiplier on the whole pool (scales hp/dmg/speed/
+ *  dodge/crit/acc together) instead of separate hp/dmg multipliers — a solo
+ *  Elite/Mini-Boss/Boss only ever gets one action per round against a full
+ *  3-mage party (up to 3 casts/mage/round from a shared energy pool), so
+ *  these compensate for that structural disadvantage. Values tuned via
+ *  headless battle-engine simulation (resolveRound) against a fresh Lv1
+ *  party, same method used throughout this balance pass. */
+interface TierProfile { pointMult: number; respawnMs: number }
 export const TIER_PROFILES: Record<MonsterTier, TierProfile> = {
-  regular: { hpMult: 1, dmgMult: 1, respawnMs: 1 * 60 * 1000 },
-  // Bumped from 1.3/1.2 — a solo Elite only ever gets ONE action per round
-  // against a full 3-mage party (up to 3 casts/mage/round from a SHARED
-  // energy pool), so the old multipliers made it a guaranteed curbstomp
-  // regardless of party level; simulated via the real battle engine
-  // (headless resolveRound runs) against a fresh Lv1 party before tuning.
-  elite: { hpMult: 2.6, dmgMult: 1.5, respawnMs: 5 * 60 * 1000 },
-  // Same reasoning as Elite, pushed further since Mini-Boss must clearly
-  // out-threaten it: solo, one action/round vs a full 3-mage party.
-  miniboss: { hpMult: 3, dmgMult: 1.7, respawnMs: 30 * 60 * 1000 },
-  boss: { hpMult: 3.5, dmgMult: 1.6, respawnMs: 60 * 60 * 1000 },
+  regular: { pointMult: 1, respawnMs: 1 * 60 * 1000 },
+  elite: { pointMult: 1.8, respawnMs: 5 * 60 * 1000 },
+  miniboss: { pointMult: 2.2, respawnMs: 30 * 60 * 1000 },
+  boss: { pointMult: 4.2, respawnMs: 60 * 60 * 1000 },
 };
 
 // ============================================================
@@ -86,33 +101,58 @@ export function netCounterMult(elementLevel: number, elementResistLevel: number)
   return 1 + Math.max(0, exposure - resist);
 }
 
-function curve(c: { base: number; growth: number }, level: number): number {
-  return c.base + c.growth * (level - 1);
-}
-function curveCapped(c: { base: number; growth: number; cap: number }, level: number): number {
-  return Math.min(c.cap, c.base + c.growth * level);
-}
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-/** The whole "shortened coding" system in one call: 5 raw fields in, every
- *  other stat out. Rounds only once at the end, matching the workbook. */
-export function computeMonsterStats(role: MonsterRole, level: number, tier: MonsterTier): ComputedMonsterStats {
-  const rp = ROLE_PROFILES[role];
-  const tp = TIER_PROFILES[tier];
+/** Splits `totalPoints` across the 6 categories per the role's weights —
+ *  floors each share, then hands out the rounding remainder to the
+ *  heaviest-weighted categories first (the most "in character" place for a
+ *  monster of that archetype to round up), so the total always lands exact. */
+function allocatePoints(totalPoints: number, weights: RoleStatWeights): RoleStatWeights {
+  const keys = Object.keys(weights) as (keyof RoleStatWeights)[];
+  const floored = keys.map((k) => Math.floor(totalPoints * weights[k]));
+  let leftover = totalPoints - floored.reduce((a, b) => a + b, 0);
+  const order = keys.map((_, i) => i).sort((a, b) => weights[keys[b]!] - weights[keys[a]!]);
+  const alloc = {} as RoleStatWeights;
+  keys.forEach((k, i) => { alloc[k] = floored[i]!; });
+  for (let i = 0; i < order.length && leftover > 0; i++, leftover--) {
+    const key = keys[order[i]!]!;
+    alloc[key] += 1;
+  }
+  return alloc;
+}
 
-  const hp = Math.round(curve(BASE_CURVE.hp, level) * rp.hpMult * tp.hpMult);
-  const dmg = Math.round(curve(BASE_CURVE.dmg, level) * rp.dmgMult * tp.dmgMult);
-  const speed = Math.round(curve(BASE_CURVE.speed, level) * rp.speedMult);
-  const accuracy = round1(curveCapped(BASE_CURVE.accuracy, level) * rp.accMult);
-  const dodge = round1(curveCapped(BASE_CURVE.dodge, level) * rp.dodgeMult);
-  const crit = round1(curveCapped(BASE_CURVE.crit, level) * rp.critMult);
+/**
+ * The whole "stats like players" system in one call. `pointMultExtra`
+ * folds in anything beyond Tier that should scale the whole pool (the
+ * population-pyramid Adult/Elder bonus, or a Boss Underling's own override
+ * — see monsterRoster.ts's `statsFor`, the only caller).
+ */
+export function computeMonsterStats(
+  role: MonsterRole,
+  level: number,
+  tier: MonsterTier,
+  element: Element,
+  pointMultExtra = 1,
+  tierPointMultOverride?: number,
+): ComputedMonsterStats {
+  const tierPointMult = tierPointMultOverride ?? TIER_PROFILES[tier].pointMult;
+  const totalPoints = Math.round(STAT_POINTS_PER_LEVEL * level * tierPointMult * pointMultExtra);
+  const alloc = allocatePoints(totalPoints, ROLE_STAT_WEIGHTS[role]);
+  const elementProfile = ROLE_ELEMENT_PROFILES[role];
+
+  const hp = Math.round(HERO_HP[element] + alloc.vit * STAT_SCALE.vit);
+  const dmg = Math.round(BASE_MONSTER_DMG * (1 + alloc.pow * STAT_SCALE.pow));
+  const speed = Math.round(SPEED[element] + alloc.cs * STAT_SCALE.cs);
+  const dodge = round1(Math.min(60, (HERO_DODGE[element] + alloc.dge * STAT_SCALE.dge) * 100));
+  const crit = round1(Math.min(60, (HERO_CRIT[element] + alloc.crt * STAT_SCALE.crt) * 100));
+  const accuracy = round1(Math.min(100, (HERO_ACC[element] + alloc.acc * STAT_SCALE.acc) * 100));
 
   return {
     hp, dmg, speed, accuracy, dodge, crit,
-    elementLevel: rp.elementLevel,
-    elementResistLevel: rp.elementResistLevel,
-    netCounterMult: netCounterMult(rp.elementLevel, rp.elementResistLevel),
+    elementLevel: elementProfile.elementLevel,
+    elementResistLevel: elementProfile.elementResistLevel,
+    netCounterMult: netCounterMult(elementProfile.elementLevel, elementProfile.elementResistLevel),
   };
 }

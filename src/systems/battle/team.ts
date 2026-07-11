@@ -8,6 +8,8 @@ import {
   HERO_HP,
   HERO_NAMES,
   ENEMY_NAMES,
+  LEVEL_GAP_XP_BONUS_MAX_MULT,
+  LEVEL_GAP_XP_BONUS_PER_LEVEL,
   MAX_ENERGY,
   MAX_EQUIPPED_ACTIVES,
   MONSTER_MOVESETS,
@@ -253,15 +255,25 @@ export function buildRandomEnemyTeam(avgPartyLevel: number): Hero[] {
 /** XP reward per monster, by Tier. */
 const TIER_XP: Record<string, number> = { regular: 60, elite: 120, miniboss: 200, boss: 400 };
 
+/** Bonus multiplier for beating something above the party's own level —
+ *  +15% per level of gap, capped at 4x so an extreme mismatch can't be
+ *  farmed for an absurd windfall. A monster AT or BELOW party level pays
+ *  the plain tier reward (never reduced). */
+export function xpGapMultiplier(monsterLevel: number, partyLevel: number): number {
+  const gap = Math.max(0, monsterLevel - partyLevel);
+  return Math.min(LEVEL_GAP_XP_BONUS_MAX_MULT, 1 + gap * LEVEL_GAP_XP_BONUS_PER_LEVEL);
+}
+
 /**
  * Builds a squad from an explicit list of Aetheria Database monster names —
  * a solo field monster (1 name), or a Boss + its 2 Underlings (3 names,
  * always exactly 3 per the Boss Underlings design, matching the player's
  * 3v3). Stats/skills come entirely from the roster + formulas + skill kits;
  * nothing here is hand-scaled — the roster's own fixed Level/Tier already
- * encode difficulty.
+ * encode difficulty. `partyLevel` only feeds the XP-reward's level-gap
+ * bonus (see `xpGapMultiplier`) — it never touches enemy stats.
  */
-export function buildEncounterEnemyTeam(monsterNames: string[]): { enemies: Hero[]; xpReward: number; dmgScale: number } {
+export function buildEncounterEnemyTeam(monsterNames: string[], partyLevel = 1): { enemies: Hero[]; xpReward: number; dmgScale: number } {
   const known = monsterNames.map((n) => MONSTER_ROSTER_BY_NAME[n]).filter((m): m is NonNullable<typeof m> => !!m);
   if (known.length === 0) return { enemies: buildRandomEnemyTeam(1), xpReward: 60, dmgScale: 1 };
 
@@ -291,6 +303,6 @@ export function buildEncounterEnemyTeam(monsterNames: string[]): { enemies: Hero
     };
   });
 
-  const xpReward = known.reduce((sum, m) => sum + (TIER_XP[m.tier] ?? 60), 0);
+  const xpReward = known.reduce((sum, m) => sum + Math.round((TIER_XP[m.tier] ?? 60) * xpGapMultiplier(m.level, partyLevel)), 0);
   return { enemies, xpReward, dmgScale: 1 };
 }

@@ -28,3 +28,12 @@ export const STARTING_RESPEC_TOKENS = 10;
 export function xpNeededForLevel(level: number): number {
   return 60 + 30 * (level - 1);
 }
+
+/** Reward for punching above your weight: a monster higher-level than the
+ *  party's own average earns bonus XP per level of gap (no penalty the
+ *  other way — stomping something below your level just pays the normal
+ *  tier reward, never less). Capped so an extreme mismatch (e.g. a Lv1
+ *  party somehow tagging a Lv80 Boss) can't be exploited for an absurd
+ *  windfall — see `xpGapMultiplier` in systems/battle/team.ts, the only caller. */
+export const LEVEL_GAP_XP_BONUS_PER_LEVEL = 0.15;
+export const LEVEL_GAP_XP_BONUS_MAX_MULT = 4;

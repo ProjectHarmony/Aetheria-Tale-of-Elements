@@ -181,34 +181,54 @@ const ROLE_ICON: Record<MonsterRosterEntry['role'], string> = {
   'AoE Controller': '🌀', 'AoE Damager': '💥', 'Dodger': '🍃', 'Burst': '💢', 'Accuracy': '🎯',
 };
 
+/** Early-hub zones stay welcoming to a fresh party — any monster at or
+ *  below this level never chases/attacks first, regardless of what its raw
+ *  Tier/Role entry above says, overriding it here rather than hand-editing
+ *  every low-level `R(...)` row. Species assigned to a map are ordered by
+ *  ascending Level (see constants/maps.ts), so Level is already the game's
+ *  own proxy for "how close to the hub" — no separate per-map field needed.
+ *  Juvenile (population Level+0) is already non-aggressive by design below;
+ *  this catches everything else that can still land this low (low-Level
+ *  Elites/wild Mini-Bosses, and the Adult variant of the very first zones'
+ *  species) so a brand-new character never gets jumped on their first steps out. */
+const EARLY_MAP_NON_AGGRO_LEVEL_CAP = 8;
+
 /** `MONSTER_META` for the map/movement layer (icon/size/aggro), built from the roster. */
 export const MONSTER_META: Record<string, MonsterMeta> = {};
 MONSTER_ROSTER.forEach((m) => {
-  MONSTER_META[m.name] = { el: m.element, tier: m.tier, icon: ROLE_ICON[m.role], size: 1, aggressive: m.aggressive };
+  const aggressive = m.level <= EARLY_MAP_NON_AGGRO_LEVEL_CAP ? false : m.aggressive;
+  MONSTER_META[m.name] = { el: m.element, tier: m.tier, icon: ROLE_ICON[m.role], size: 1, aggressive };
 });
 
 /**
- * Adult/Elder-only stat bonus, applied on top of the normal Regular-tier
- * formula — Juvenile (no suffix) gets none, staying exactly as easy as the
- * base curve intends. Regular tier itself (`TIER_PROFILES.regular`) is
- * `hpMult: 1, dmgMult: 1` — zero compensation for a solo monster's basic
- * "one action/round vs a full 3-mage party" disadvantage, the same gap that
- * made Elite/Mini-Boss a curbstomp before those got tuned. Adult ("the
- * normal fight," per the Population Pyramid doc) gets a moderate bump;
- * Elder ("a rare, real threat") gets roughly Elite-tier toughness. Verified
- * via headless battle-engine simulation against a fresh Lv1 party, same
- * method used for the Elite/Mini-Boss tier calibration.
+ * Population-pyramid point-pool multiplier — folds into `computeMonsterStats`
+ * the same way Tier does, scaling hp/dmg/speed/dodge/crit/acc together
+ * rather than hp/dmg alone. Juvenile (no suffix) gets none, staying exactly
+ * as easy as a Regular-tier monster's base formula intends — Regular tier
+ * itself (`TIER_PROFILES.regular`) has `pointMult: 1`, zero compensation for
+ * a solo monster's "one action/round vs a full 3-mage party" disadvantage,
+ * the same gap that made Elite/Mini-Boss a curbstomp before those were
+ * tuned. Adult ("the normal fight," per the Population Pyramid doc) gets a
+ * strong bump; Elder ("a rare, real threat") gets pushed further still.
+ * Verified via headless battle-engine simulation against a fresh Lv1 party.
  */
-const POPULATION_STAT_BONUS: Record<string, { hpMult: number; dmgMult: number }> = {
-  ' (Adult)': { hpMult: 1.6, dmgMult: 1.3 },
-  ' (Elder)': { hpMult: 2.8, dmgMult: 1.7 },
+const POPULATION_POINT_MULT: Record<string, number> = {
+  ' (Adult)': 3,
+  ' (Elder)': 4.2,
 };
+
+/** Boss Underlings share the roster's `tier: 'miniboss'` field (for
+ *  respawn/XP bucketing) but never fight solo — they're always one of 3 in
+ *  a Boss's 3v3, not a lone monster against the player's full party, so
+ *  they don't need Mini-Boss's full solo-compensation multiplier. Overridden
+ *  down to roughly Elite's — still a real contributor to the fight, without
+ *  inheriting a boost sized for a fight they're never actually in. */
+const BOSS_UNDERLING_POINT_MULT = 1.8;
 
 /** Live-computed battle stats for a roster entry — see `computeMonsterStats`. */
 export function statsFor(entry: MonsterRosterEntry) {
-  const base = computeMonsterStats(entry.role, entry.level, entry.tier);
   const suffix = entry.name.endsWith(' (Adult)') ? ' (Adult)' : entry.name.endsWith(' (Elder)') ? ' (Elder)' : '';
-  const bonus = POPULATION_STAT_BONUS[suffix];
-  if (!bonus) return base;
-  return { ...base, hp: Math.round(base.hp * bonus.hpMult), dmg: Math.round(base.dmg * bonus.dmgMult) };
+  const pointMultExtra = POPULATION_POINT_MULT[suffix] ?? 1;
+  const tierPointMultOverride = entry.subtype === 'Boss Underling' ? BOSS_UNDERLING_POINT_MULT : undefined;
+  return computeMonsterStats(entry.role, entry.level, entry.tier, entry.element, pointMultExtra, tierPointMultOverride);
 }
