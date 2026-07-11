@@ -6,6 +6,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { HUB_MAP_ID, MAPS, mapAccentColor, mapBackground, mapIconFor } from '@/constants';
 import { useWheelPinchZoom } from '@/hooks/useWheelPinchZoom';
 import { Joystick } from './Joystick';
+import { Minimap } from './Minimap';
 import { MinimapBadge } from './MinimapBadge';
 import { WorldMapModal } from './WorldMapModal';
 
@@ -210,9 +211,12 @@ export function MapPage() {
       </div>
 
       <div className="absolute left-0 right-0 top-0 z-40 flex items-start justify-between p-3.5">
-        <div className="rounded-2xl border border-white/15 bg-[#241a30]/80 px-3.5 py-1.5 font-['Baloo_2'] text-[12px] font-bold text-white backdrop-blur-md">
-          {mapIconFor(map)} {map.name}
-          <span className="mt-0.5 block text-[8.5px] font-semibold text-white/45">{map.sub}</span>
+        <div className="flex flex-col items-start gap-1.5">
+          <div className="rounded-2xl border border-white/15 bg-[#241a30]/80 px-3.5 py-1.5 font-['Baloo_2'] text-[12px] font-bold text-white backdrop-blur-md">
+            {mapIconFor(map)} {map.name}
+            <span className="mt-0.5 block text-[8.5px] font-semibold text-white/45">{map.sub}</span>
+          </div>
+          <Minimap map={map} playerPos={playerPos} onClick={() => setWorldMapOpen(true)} />
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <button

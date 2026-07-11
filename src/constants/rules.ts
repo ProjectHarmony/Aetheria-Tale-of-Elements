@@ -17,7 +17,7 @@ export const RESOLUTION_HIT_DELAY_MS = 500;
 export const RESOLUTION_STEP_GAP_MS = 550;
 
 /** RPG progression — Ragnarok-style leveling on the Axie battle chassis. */
-export const MAX_MAGE_LEVEL = 20;
+export const MAX_MAGE_LEVEL = 60;
 export const STAT_POINTS_PER_LEVEL = 5;
 export const SKILL_POINTS_PER_LEVEL = 1;
 export const PVP_UNLOCK_LEVEL = 6;

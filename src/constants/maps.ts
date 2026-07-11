@@ -117,14 +117,14 @@ Object.entries(BOSS_LANDMARKS).forEach(([bossName, mapId]) => {
 // weakest nearest the hub, strongest at the frontier. Elite/Mini-Boss still
 // spawn as a flat local population (FIELD_INSTANCES_PER_SPECIES). Regular
 // species instead spawn their full 3-tier Population Pyramid (see
-// monsterRoster.ts POPULATION_LEVELS/POPULATION_COUNTS): Juvenile (x20) +
-// Adult (x10) always land on the species' primary map, but the single rare
+// monsterRoster.ts POPULATION_LEVELS/POPULATION_COUNTS): Juvenile (x12) +
+// Adult (x5) always land on the species' primary map, but the single rare
 // Elder is NOT guaranteed there — each species independently rolls whether
 // it spawns an Elder at all (~45% do), and when it does, it lands on a
 // random map within a nearby difficulty window, often a different map than
 // its own Juvenile/Adult population.
 // ============================================================
-const FIELD_INSTANCES_PER_SPECIES = 5;
+const FIELD_INSTANCES_PER_SPECIES = 2;
 const POPULATION_SUFFIXES = POPULATION_LEVELS.filter((l) => l.suffix !== '').map((l) => l.suffix);
 
 function computeMapLayers(): Record<string, number> {
@@ -202,9 +202,9 @@ function scatterOnMap(map: MapDef, name: string, count: number): void {
       return;
     }
 
-    scatterOnMap(map, entry.name, POPULATION_COUNTS[''] ?? 20);
+    scatterOnMap(map, entry.name, POPULATION_COUNTS[''] ?? 12);
     const adult = MONSTER_ROSTER_BY_NAME[entry.name + ' (Adult)'];
-    if (adult) scatterOnMap(map, adult.name, POPULATION_COUNTS[' (Adult)'] ?? 10);
+    if (adult) scatterOnMap(map, adult.name, POPULATION_COUNTS[' (Adult)'] ?? 5);
 
     const elder = MONSTER_ROSTER_BY_NAME[entry.name + ' (Elder)'];
     const spawnsElder = seededUnit(entry.name + '::elder-chance') < -0.1; // ~45% of species spawn an Elder anywhere at all

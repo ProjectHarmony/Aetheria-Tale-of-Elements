@@ -1,10 +1,7 @@
-import { useState } from 'react';
 import type { Element, MageState, Skill } from '@/types';
-import { ELEMENT_META, MAX_EQUIPPED_ACTIVES, SKILL_TREES, ultimateUnlocked } from '@/constants';
+import { ELEMENT_META, SKILL_TREES, ultimateUnlocked } from '@/constants';
 import { effectiveRanks, type MageDraft } from '@/systems/party';
-import { unlockedActives } from '@/systems/battle';
 import { SkillTreeNode } from './SkillTreeNode';
-import { SkillTreeSheet } from './SkillTreeSheet';
 
 const BRANCH_BLURB: Record<string, string> = {
   Incineration: 'nuker', Cinderguard: 'fire tank', Flashfire: 'fire assassin',
@@ -18,13 +15,16 @@ interface SkillsTabProps {
   mage: MageState;
   draft: MageDraft;
   skillPointsLeft: number;
-  onStage: (skill: Skill) => void;
-  onUnstage: (skill: Skill) => void;
-  onToggleEquip: (skillId: string) => void;
+  onOpenSkill: (skillId: string) => void;
 }
 
-export function SkillsTab({ el, mage, draft, skillPointsLeft, onStage, onUnstage, onToggleEquip }: SkillsTabProps) {
-  const [openSkillId, setOpenSkillId] = useState<string | null>(null);
+/** Pure display — the tap-a-skill detail sheet lives up in PartyMageDetail
+ *  now, not here (see SkillTreeSheet.tsx: rendering it nested inside this
+ *  component's own scrollable, content-height wrapper was the bug — its
+ *  `absolute inset-0` anchored to THIS div's full (very tall) height instead
+ *  of the visible screen, so the sheet opened off-screen below the fold for
+ *  any skill near the top of the tree). */
+export function SkillsTab({ el, mage, draft, skillPointsLeft, onOpenSkill }: SkillsTabProps) {
   const tree = SKILL_TREES[el];
   const ranks = effectiveRanks(mage, draft);
 
@@ -32,21 +32,16 @@ export function SkillsTab({ el, mage, draft, skillPointsLeft, onStage, onUnstage
   const ultimate = tree.find((s) => s.tier === 5)!;
   const branches = [...new Set(tree.filter((s) => s.tier >= 2 && s.tier <= 4).map((s) => s.branch))];
 
-  const actives = unlockedActives(mage, el);
-  const needsEquipChoice = actives.length > MAX_EQUIPPED_ACTIVES;
-  const equipped = mage.equipped ?? actives.slice(0, MAX_EQUIPPED_ACTIVES).map((s) => s.id);
-
   const isRaisable = (s: Skill) => s.prereqs.every((p) => (ranks[p.skillId] || 0) >= p.rank);
-  const openSkill = tree.find((s) => s.id === openSkillId) ?? null;
 
   function node(s: Skill) {
     const rank = ranks[s.id] || 0;
     const raisable = s.tier === 5 ? ultimateUnlocked(mage, el) || rank > 0 : isRaisable(s);
-    return <SkillTreeNode key={s.id} skill={s} el={el} rank={rank} raisable={raisable} onTap={() => setOpenSkillId(s.id)} />;
+    return <SkillTreeNode key={s.id} skill={s} el={el} rank={rank} raisable={raisable} onTap={() => onOpenSkill(s.id)} />;
   }
 
   return (
-    <div className="relative">
+    <div>
       <div className="mb-2.5 text-[10px] font-bold uppercase tracking-wide text-[#2c1f3d]/70">
         Skill Tree — {skillPointsLeft} point{skillPointsLeft === 1 ? '' : 's'} to spend
       </div>
@@ -88,20 +83,6 @@ export function SkillsTab({ el, mage, draft, skillPointsLeft, onStage, onUnstage
         <div className="text-[8px] font-extrabold uppercase tracking-wide text-[var(--color-gold)]">✦ Ultimate</div>
         <div className="w-full">{node(ultimate)}</div>
       </div>
-
-      <SkillTreeSheet
-        skill={openSkill}
-        el={el}
-        mage={mage}
-        draft={draft}
-        skillPointsLeft={skillPointsLeft}
-        needsEquipChoice={needsEquipChoice}
-        equipped={equipped}
-        onClose={() => setOpenSkillId(null)}
-        onStage={onStage}
-        onUnstage={onUnstage}
-        onToggleEquip={onToggleEquip}
-      />
     </div>
   );
 }

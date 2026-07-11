@@ -60,8 +60,15 @@ interface TierProfile {
 
 export const TIER_PROFILES: Record<MonsterTier, TierProfile> = {
   regular: { hpMult: 1, dmgMult: 1, respawnMs: 1 * 60 * 1000 },
-  elite: { hpMult: 1.3, dmgMult: 1.2, respawnMs: 5 * 60 * 1000 },
-  miniboss: { hpMult: 2, dmgMult: 1.4, respawnMs: 30 * 60 * 1000 },
+  // Bumped from 1.3/1.2 — a solo Elite only ever gets ONE action per round
+  // against a full 3-mage party (up to 3 casts/mage/round from a SHARED
+  // energy pool), so the old multipliers made it a guaranteed curbstomp
+  // regardless of party level; simulated via the real battle engine
+  // (headless resolveRound runs) against a fresh Lv1 party before tuning.
+  elite: { hpMult: 2.6, dmgMult: 1.5, respawnMs: 5 * 60 * 1000 },
+  // Same reasoning as Elite, pushed further since Mini-Boss must clearly
+  // out-threaten it: solo, one action/round vs a full 3-mage party.
+  miniboss: { hpMult: 3, dmgMult: 1.7, respawnMs: 30 * 60 * 1000 },
   boss: { hpMult: 3.5, dmgMult: 1.6, respawnMs: 60 * 60 * 1000 },
 };
 

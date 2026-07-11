@@ -3,13 +3,14 @@ import { motion } from 'framer-motion';
 import type { Element } from '@/types';
 import type { StatKey } from '@/constants';
 import { ELEMENT_META, HERO_NAMES, MAX_EQUIPPED_ACTIVES, MAX_MAGE_LEVEL, SKILLS_BY_ID, SKILL_TREES, STAT_META, xpNeededForLevel } from '@/constants';
-import { derivedStatsFor, equippedActives } from '@/systems/battle';
+import { derivedStatsFor, equippedActives, unlockedActives } from '@/systems/battle';
 import { createEmptyDraft, draftHasPending, stageSkillRank, stageStatPoint, unstageSkillRank, unstageStatPoint } from '@/systems/party';
 import { useGameStore } from '@/stores/gameStore';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { MageSprite } from '@/components/ui/MageSprite';
 import { StatsTab } from './StatsTab';
 import { SkillsTab } from './SkillsTab';
+import { SkillTreeSheet } from './SkillTreeSheet';
 import { EquipmentTab } from './EquipmentTab';
 
 type SubTab = 'stats' | 'skills' | 'equipment';
@@ -25,8 +26,10 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
   const [draft, setDraft] = useState(createEmptyDraft());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [respecConfirmOpen, setRespecConfirmOpen] = useState(false);
+  const [openSkillId, setOpenSkillId] = useState<string | null>(null);
 
   useEffect(() => setDraft(createEmptyDraft()), [el]);
+  useEffect(() => setOpenSkillId(null), [el]);
 
   const mage = party?.mages[el];
   if (!mage) return null;
@@ -39,6 +42,11 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
   const skillPointsLeft = mage.skillPoints - draft.skillPointsUsed;
   const pending = draftHasPending(draft);
   const tokens = getRespecTokens();
+
+  const openSkill = openSkillId ? SKILL_TREES[el].find((s) => s.id === openSkillId) ?? null : null;
+  const actives = unlockedActives(mage, el);
+  const needsEquipChoice = actives.length > MAX_EQUIPPED_ACTIVES;
+  const equipped = mage.equipped ?? actives.slice(0, MAX_EQUIPPED_ACTIVES).map((s) => s.id);
 
   function confirmSummary() {
     const statNames = (Object.keys(draft.stats) as StatKey[]).filter((k) => draft.stats[k] > 0).map((k) => `${STAT_META[k].name} +${draft.stats[k]}`).join(', ');
@@ -105,18 +113,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
           mage={mage}
           draft={draft}
           skillPointsLeft={skillPointsLeft}
-          onStage={(skill) => setDraft((d) => stageSkillRank(d, mage, skill, skillPointsLeft))}
-          onUnstage={(skill) => setDraft((d) => unstageSkillRank(d, mage, skill, SKILL_TREES[el]))}
-          onToggleEquip={(id) => {
-            const current = equippedActives(mage, el).map((s) => s.id);
-            if (current.includes(id)) {
-              if (current.length <= 1) return;
-              setEquipped(el, current.filter((x) => x !== id));
-            } else {
-              if (current.length >= MAX_EQUIPPED_ACTIVES) return;
-              setEquipped(el, [...current, id]);
-            }
-          }}
+          onOpenSkill={setOpenSkillId}
         />
       )}
       {subTab === 'equipment' && <EquipmentTab />}
@@ -177,6 +174,34 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
           respec(el);
           setDraft(createEmptyDraft());
           setRespecConfirmOpen(false);
+        }}
+      />
+
+      {/* Rendered here (PartyMageDetail's own root), not nested inside
+          SkillsTab's scrollable content — `absolute inset-0` needs to
+          resolve against a screen-height ancestor to behave as a proper
+          bottom sheet, not against a div that's exactly as tall as the
+          whole skill tree, which put it off-screen below the fold. */}
+      <SkillTreeSheet
+        skill={openSkill}
+        el={el}
+        mage={mage}
+        draft={draft}
+        skillPointsLeft={skillPointsLeft}
+        needsEquipChoice={needsEquipChoice}
+        equipped={equipped}
+        onClose={() => setOpenSkillId(null)}
+        onStage={(skill) => setDraft((d) => stageSkillRank(d, mage, skill, skillPointsLeft))}
+        onUnstage={(skill) => setDraft((d) => unstageSkillRank(d, mage, skill, SKILL_TREES[el]))}
+        onToggleEquip={(id) => {
+          const current = equippedActives(mage, el).map((s) => s.id);
+          if (current.includes(id)) {
+            if (current.length <= 1) return;
+            setEquipped(el, current.filter((x) => x !== id));
+          } else {
+            if (current.length >= MAX_EQUIPPED_ACTIVES) return;
+            setEquipped(el, [...current, id]);
+          }
         }}
       />
     </div>

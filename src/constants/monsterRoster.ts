@@ -118,8 +118,8 @@ const MONSTER_ROSTER_RAW: MonsterRosterEntry[] = [
  * each level gets its own Level (relative to the species' own authored
  * Level, so danger still scales exactly the way the base roster already
  * ordered it) and its own aggro behavior:
- *   base Level      "Juvenile" (no suffix) — non-aggressive, most common (x20/map)
- *   base Level + 2  "(Adult)"              — aggressive, the normal fight (x10/map)
+ *   base Level      "Juvenile" (no suffix) — non-aggressive, most common (x12/map)
+ *   base Level + 2  "(Adult)"              — aggressive, the normal fight (x5/map)
  *   base Level + 14 "(Elder)"              — aggressive, rare — NOT guaranteed
  *                                             near its own species; see the
  *                                             sparse cross-map placement in
@@ -133,7 +133,7 @@ export const POPULATION_LEVELS: PopulationLevelDef[] = [
   { levelOffset: 14, suffix: ' (Elder)', aggressive: true },
 ];
 /** Individuals placed per population level, per map that hosts them — see constants/maps.ts placement pass. */
-export const POPULATION_COUNTS: Record<string, number> = { '': 20, ' (Adult)': 10, ' (Elder)': 1 };
+export const POPULATION_COUNTS: Record<string, number> = { '': 12, ' (Adult)': 5, ' (Elder)': 1 };
 
 function expandRegularFieldEntry(entry: MonsterRosterEntry): MonsterRosterEntry[] {
   return POPULATION_LEVELS.map((lvl) => ({ ...entry, name: entry.name + lvl.suffix, level: entry.level + lvl.levelOffset, aggressive: lvl.aggressive }));
@@ -187,7 +187,28 @@ MONSTER_ROSTER.forEach((m) => {
   MONSTER_META[m.name] = { el: m.element, tier: m.tier, icon: ROLE_ICON[m.role], size: 1, aggressive: m.aggressive };
 });
 
+/**
+ * Adult/Elder-only stat bonus, applied on top of the normal Regular-tier
+ * formula — Juvenile (no suffix) gets none, staying exactly as easy as the
+ * base curve intends. Regular tier itself (`TIER_PROFILES.regular`) is
+ * `hpMult: 1, dmgMult: 1` — zero compensation for a solo monster's basic
+ * "one action/round vs a full 3-mage party" disadvantage, the same gap that
+ * made Elite/Mini-Boss a curbstomp before those got tuned. Adult ("the
+ * normal fight," per the Population Pyramid doc) gets a moderate bump;
+ * Elder ("a rare, real threat") gets roughly Elite-tier toughness. Verified
+ * via headless battle-engine simulation against a fresh Lv1 party, same
+ * method used for the Elite/Mini-Boss tier calibration.
+ */
+const POPULATION_STAT_BONUS: Record<string, { hpMult: number; dmgMult: number }> = {
+  ' (Adult)': { hpMult: 1.6, dmgMult: 1.3 },
+  ' (Elder)': { hpMult: 2.8, dmgMult: 1.7 },
+};
+
 /** Live-computed battle stats for a roster entry — see `computeMonsterStats`. */
 export function statsFor(entry: MonsterRosterEntry) {
-  return computeMonsterStats(entry.role, entry.level, entry.tier);
+  const base = computeMonsterStats(entry.role, entry.level, entry.tier);
+  const suffix = entry.name.endsWith(' (Adult)') ? ' (Adult)' : entry.name.endsWith(' (Elder)') ? ' (Elder)' : '';
+  const bonus = POPULATION_STAT_BONUS[suffix];
+  if (!bonus) return base;
+  return { ...base, hp: Math.round(base.hp * bonus.hpMult), dmg: Math.round(base.dmg * bonus.dmgMult) };
 }

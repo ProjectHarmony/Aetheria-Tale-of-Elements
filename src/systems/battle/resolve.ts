@@ -149,14 +149,21 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
 
     await delay(RESOLUTION_HIT_DELAY_MS);
 
+    // Whichever side the actor is on, `opposingTeam` is who its attacks/AoE
+    // should hit and `ownTeam` is who its buffs/heals should hit — computed
+    // once so a monster's AoE (Cleave, Unnerving Roar, a Boss's Crownfall)
+    // targets the PLAYER team, not hardcoded to `state.enemies` (which used
+    // to mean an acting monster's AoE hit its own side — itself, if solo,
+    // or its Underlings in a Boss trio — dealing zero damage to players).
+    const casterIsPlayer = state.players.some((h) => h.id === actor.id);
+    const ownTeam = aliveHeroes(casterIsPlayer ? state.players : state.enemies);
+    const opposingTeam = aliveHeroes(casterIsPlayer ? state.enemies : state.players);
+
     // Team/enemy-wide effects apply unconditionally on cast, independent of
     // whether the card also deals direct damage (covers both classic buff
     // cards and hybrid Ultimates like World Pillar: AoE dmg + team shield + taunt).
     if (card && card.effect) {
-      const casterIsPlayer = state.players.some((h) => h.id === actor.id);
-      const team = aliveHeroes(casterIsPlayer ? state.players : state.enemies);
-      const enemyTeam = aliveHeroes(casterIsPlayer ? state.enemies : state.players);
-      const buffEvents = applyBuffCard(card, team, enemyTeam, state);
+      const buffEvents = applyBuffCard(card, ownTeam, opposingTeam, state);
       for (const ev of buffEvents) yield ev;
       if (card.effect.cooldownRounds) {
         actor.skillCooldowns = { ...actor.skillCooldowns, [card.id]: card.effect.cooldownRounds };
@@ -164,9 +171,9 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
     }
 
     if (dealsDirectDamage) {
-      const targets: Hero[] = targetsFor(card, target, state.enemies);
+      const targets: Hero[] = targetsFor(card, target, opposingTeam);
       const hitsCount = card?.effect?.hits ?? 1;
-      const alliesOfActor = state.players.some((h) => h.id === actor.id) ? aliveHeroes(state.players) : aliveHeroes(state.enemies);
+      const alliesOfActor = ownTeam;
 
       for (const t of targets) {
         for (let hitIdx = 0; hitIdx < hitsCount; hitIdx++) {
@@ -228,7 +235,7 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
       // Chain Gale-style secondary hit on one other random enemy, at a % of the primary dmg.
       const secondaryPct = card?.effect?.secondaryRandomPct;
       if (card && secondaryPct && !isChannelPayoff) {
-        const others = aliveHeroes(state.enemies).filter((h) => h.id !== target.id);
+        const others = opposingTeam.filter((h) => h.id !== target.id);
         const t2 = others[Math.floor(Math.random() * others.length)];
         const skill = ALL_SKILLS_BY_ID[card.id];
         if (t2 && skill) {
