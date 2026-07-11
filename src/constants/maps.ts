@@ -1,6 +1,6 @@
 import type { Direction, MapDef, PortalDef } from '@/types';
 import { WORLD_MAP_DATA, type RawWarpPortal } from './worldMapData';
-import { BOSS_LANDMARKS, BOSS_UNDERLINGS, MONSTER_META, MONSTER_ROSTER } from './monsterRoster';
+import { BOSS_LANDMARKS, BOSS_UNDERLINGS, MONSTER_META, MONSTER_ROSTER, MONSTER_ROSTER_BY_NAME, POPULATION_COUNTS, POPULATION_LEVELS } from './monsterRoster';
 import { TIER_PROFILES } from './monsterFormulas';
 
 /**
@@ -97,37 +97,35 @@ export function mapGraphSelfTest(): string[] {
 mapGraphSelfTest();
 
 // ============================================================
-// BOSS + UNDERLING PLACEMENT — the 6 Aetheria Bosses, each with its 2
-// Tactician-role Underlings, placed at their designated landmark map.
-// Composition is always exactly these 3 (matching the player's 3v3) — see
-// BOSS_UNDERLINGS/BOSS_LANDMARKS (constants/monsterRoster.ts) and
-// mapStore.ts's group-aware encounter trigger. No source x/y was given for
-// these, so placement within each 1500x1500 map is a small judgment call —
-// spread in a loose triangle near the map's center.
+// BOSS PLACEMENT — the 6 Aetheria Bosses, placed at their designated
+// landmark map. Their 2 Tactician-role Underlings are battle-only: they
+// never roam the map themselves, only joining the fight once the player
+// walks into the Boss (see mapStore.ts's encounterGroup) — composition is
+// always exactly these 3 (matching the player's 3v3), see
+// BOSS_UNDERLINGS/BOSS_LANDMARKS (constants/monsterRoster.ts).
 // ============================================================
 Object.entries(BOSS_LANDMARKS).forEach(([bossName, mapId]) => {
   const map = MAPS[mapId];
-  const underlings = BOSS_UNDERLINGS[bossName];
-  if (!map || !underlings) return;
-  const [underlingA, underlingB] = underlings;
-  const cx = map.w / 2, cy = map.h / 2;
-  map.monsters.push([bossName, cx, cy], [underlingA, cx - 120, cy + 140], [underlingB, cx + 120, cy - 140]);
+  if (!map || !BOSS_UNDERLINGS[bossName]) return;
+  map.monsters.push([bossName, map.w / 2, map.h / 2]);
 });
 
 // ============================================================
-// FIELD MONSTER PLACEMENT — every non-Boss/non-Underling monster (45
-// Regular + 12 Elite + 15 wild Mini-Boss = 72), placed by ascending Level
-// onto every map that isn't the hub or a Boss landmark, ordered by
-// hop-distance from Crown Haven City — weakest nearest the hub, strongest
-// at the frontier, exactly as requested. Each assigned species spawns as a
-// small local population — several roaming individuals scattered around
-// the map, not a single lone spawn — so exploring never reads as "empty."
-// A light stand-in for the full 31-per-species "Population Pyramid" spread
-// with Juvenile/Adult/Elder sub-populations (see
-// systems/map/populationPyramid.ts for that richer data model, still
-// unused pending zone→species assignments).
+// FIELD MONSTER PLACEMENT — every non-Boss/non-Underling species (45
+// Regular + 12 Elite + 15 wild Mini-Boss = 72), assigned a primary map by
+// ascending (base) Level, ordered by hop-distance from Crown Haven City —
+// weakest nearest the hub, strongest at the frontier. Elite/Mini-Boss still
+// spawn as a flat local population (FIELD_INSTANCES_PER_SPECIES). Regular
+// species instead spawn their full 3-tier Population Pyramid (see
+// monsterRoster.ts POPULATION_LEVELS/POPULATION_COUNTS): Juvenile (x20) +
+// Adult (x10) always land on the species' primary map, but the single rare
+// Elder is NOT guaranteed there — each species independently rolls whether
+// it spawns an Elder at all (~45% do), and when it does, it lands on a
+// random map within a nearby difficulty window, often a different map than
+// its own Juvenile/Adult population.
 // ============================================================
 const FIELD_INSTANCES_PER_SPECIES = 5;
+const POPULATION_SUFFIXES = POPULATION_LEVELS.filter((l) => l.suffix !== '').map((l) => l.suffix);
 
 function computeMapLayers(): Record<string, number> {
   const layer: Record<string, number> = { [HUB_MAP_ID]: 0 };
@@ -143,11 +141,39 @@ function computeMapLayers(): Record<string, number> {
   return layer;
 }
 
-/** Deterministic pseudo-random unit offset in [-1, 1] from a string seed — keeps placement stable across reloads without hand-picking x/y per monster. */
+/** Deterministic pseudo-random unit offset in [-1, 1] from a string seed —
+ *  keeps placement stable across reloads without hand-picking x/y per
+ *  monster. Runs a proper avalanche finalizer (not just a running sum) so
+ *  seeds that differ by one trailing character (e.g. name+'x'+3 vs
+ *  name+'x'+4) still land far apart in [-1, 1] — a plain polynomial rolling
+ *  hash left near-identical seeds clumped together, which is why monster
+ *  populations used to read as a tight nest instead of a wide scatter. */
 function seededUnit(seed: string): number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return ((Math.abs(h) % 1000) / 1000) * 2 - 1;
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  h ^= h >>> 16;
+  return ((h >>> 0) / 4294967295) * 2 - 1;
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+/** Scatters `count` individuals of one species/tier independently across the
+ *  whole map (each instance gets its own seeded-random point, not a shared
+ *  nest/cluster point) so a species' population reads as roaming the whole
+ *  zone rather than a single tight den. */
+function scatterOnMap(map: MapDef, name: string, count: number): void {
+  for (let n = 0; n < count; n++) {
+    const x = clamp(map.w / 2 + seededUnit(name + 'x' + n) * map.w * 0.47, 16, map.w - 16);
+    const y = clamp(map.h / 2 + seededUnit(name + 'y' + n) * map.h * 0.47, 16, map.h - 16);
+    map.monsters.push([name, x, y]);
+  }
 }
 
 {
@@ -157,25 +183,38 @@ function seededUnit(seed: string): number {
     .filter((id) => id !== HUB_MAP_ID && !bossMapIds.has(id))
     .sort((a, b) => (mapLayers[a] ?? 99) - (mapLayers[b] ?? 99) || a.localeCompare(b));
 
-  const fieldMonsters = MONSTER_ROSTER
-    .filter((m) => m.subtype === 'Field' && m.tier !== 'boss')
+  // One entry per species for assignment purposes — Adult/Elder variants are
+  // derived from their Juvenile sibling's assigned map below, not assigned
+  // independently, so the existing ascending-level/hop-distance ordering is
+  // untouched by the 3x population expansion.
+  const baseFieldMonsters = MONSTER_ROSTER
+    .filter((m) => m.subtype === 'Field' && m.tier !== 'boss' && !POPULATION_SUFFIXES.some((sfx) => m.name.endsWith(sfx)))
     .sort((a, b) => a.level - b.level);
 
-  fieldMonsters.forEach((entry, i) => {
-    const mapId = fieldMapIds[Math.min(fieldMapIds.length - 1, Math.floor((i * fieldMapIds.length) / fieldMonsters.length))];
+  baseFieldMonsters.forEach((entry, i) => {
+    const mapIndex = Math.min(fieldMapIds.length - 1, Math.floor((i * fieldMapIds.length) / baseFieldMonsters.length));
+    const mapId = fieldMapIds[mapIndex];
     const map = mapId ? MAPS[mapId] : undefined;
     if (!map) return;
-    // Clusters that landed on this map earlier get nudged apart via a
-    // per-species angular offset so multiple species' populations don't
-    // all pile onto the same patch of ground.
-    const clusterIndex = Math.floor(map.monsters.length / FIELD_INSTANCES_PER_SPECIES);
-    const clusterAngle = clusterIndex * 2.4;
-    const clusterCx = map.w / 2 + Math.cos(clusterAngle) * map.w * 0.22;
-    const clusterCy = map.h / 2 + Math.sin(clusterAngle) * map.h * 0.22;
-    for (let n = 0; n < FIELD_INSTANCES_PER_SPECIES; n++) {
-      const cx = clusterCx + seededUnit(entry.name + 'x' + n) * map.w * 0.16;
-      const cy = clusterCy + seededUnit(entry.name + 'y' + n) * map.h * 0.16;
-      map.monsters.push([entry.name, cx, cy]);
+
+    if (entry.tier !== 'regular') {
+      scatterOnMap(map, entry.name, FIELD_INSTANCES_PER_SPECIES);
+      return;
+    }
+
+    scatterOnMap(map, entry.name, POPULATION_COUNTS[''] ?? 20);
+    const adult = MONSTER_ROSTER_BY_NAME[entry.name + ' (Adult)'];
+    if (adult) scatterOnMap(map, adult.name, POPULATION_COUNTS[' (Adult)'] ?? 10);
+
+    const elder = MONSTER_ROSTER_BY_NAME[entry.name + ' (Elder)'];
+    const spawnsElder = seededUnit(entry.name + '::elder-chance') < -0.1; // ~45% of species spawn an Elder anywhere at all
+    if (elder && spawnsElder) {
+      const window = 3;
+      const offset = Math.round(seededUnit(entry.name + '::elder-map') * window);
+      const elderMapIndex = Math.max(0, Math.min(fieldMapIds.length - 1, mapIndex + offset));
+      const elderMapId = fieldMapIds[elderMapIndex];
+      const elderMap = elderMapId ? MAPS[elderMapId] : undefined;
+      if (elderMap) scatterOnMap(elderMap, elder.name, POPULATION_COUNTS[' (Elder)'] ?? 1);
     }
   });
 }

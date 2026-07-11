@@ -30,7 +30,7 @@ export function regenEnergyForRound(state: Pick<BattleState, 'energy' | 'maxEner
  *  always >= 1). Ties broken randomly for a little variety. */
 function chooseEnemySkill(actor: Hero): Card | null {
   const moveset = actor.moveset ?? [];
-  const affordable = moveset.filter((c) => c.cost <= (actor.energy ?? 0));
+  const affordable = moveset.filter((c) => c.cost <= (actor.energy ?? 0) && !(actor.skillCooldowns?.[c.id] ?? 0));
   if (affordable.length === 0) return null;
   const maxCost = Math.max(...affordable.map((c) => c.cost));
   const best = affordable.filter((c) => c.cost === maxCost);
@@ -158,6 +158,9 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
       const enemyTeam = aliveHeroes(casterIsPlayer ? state.enemies : state.players);
       const buffEvents = applyBuffCard(card, team, enemyTeam, state);
       for (const ev of buffEvents) yield ev;
+      if (card.effect.cooldownRounds) {
+        actor.skillCooldowns = { ...actor.skillCooldowns, [card.id]: card.effect.cooldownRounds };
+      }
     }
 
     if (dealsDirectDamage) {

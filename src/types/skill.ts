@@ -225,6 +225,8 @@ export interface SkillEffect {
    * gate). Not a generic rider — handled as a dedicated resolve.ts step.
    */
   channelKind?: 'ruinousCharge';
+  /** Rounds this skill locks itself out for on the caster after being cast (e.g. Field Reversal: 2). Checked against the caster's `skillCooldowns` before the AI/player may pick it again. */
+  cooldownRounds?: number;
 }
 
 export interface SkillPrereq {

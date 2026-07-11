@@ -36,11 +36,21 @@ export function computeCamera(pos: Vec2, map: MapDef, viewW: number, viewH: numb
   };
 }
 
+/** A uniform-random point inside the map's walkable bounds — used to give a
+ *  respawning monster a fresh position instead of reappearing on the exact
+ *  spot it was defeated on. */
+function randomMapPosition(map: MapDef): Vec2 {
+  return { x: 16 + Math.random() * Math.max(0, map.w - 32), y: 16 + Math.random() * Math.max(0, map.h - 32) };
+}
+
 /**
  * Resolves a map's monster slots into live roamers, honoring respawn
  * cooldowns (regular/elite/miniboss) and the Boss tier's world-singleton
  * state — a slot is skipped entirely if it's on cooldown or (for a Boss)
- * currently dead. Mirrors the original's loadMap() roamer-building pass.
+ * currently dead. Mirrors the original's loadMap() roamer-building pass. A
+ * slot that's respawning (was previously defeated, cooldown now elapsed)
+ * reappears at a random map position rather than its authored spawn point;
+ * a slot that's never been defeated yet keeps its authored position.
  */
 export function resolveRoamers(
   map: MapDef,
@@ -52,14 +62,21 @@ export function resolveRoamers(
   map.monsters.forEach(([name, x, y], slot) => {
     const meta: MonsterMeta | undefined = MONSTER_META[name];
     if (!meta) return;
+    let pos: Vec2 = { x, y };
     if (meta.tier === 'boss') {
       const defeatedAt = bossDefeatedAt[name];
-      if (defeatedAt && now - defeatedAt < RESPAWN_MS.boss) return;
+      if (defeatedAt !== undefined) {
+        if (now - defeatedAt < RESPAWN_MS.boss) return;
+        pos = randomMapPosition(map);
+      }
     } else {
       const until = respawnAt[slotKey(map.id, slot)];
-      if (until && now < until) return;
+      if (until !== undefined) {
+        if (now < until) return;
+        pos = randomMapPosition(map);
+      }
     }
-    out.push({ id: `${map.id}-${slot}`, slot, name, meta, x, y, aggro: meta.aggressive });
+    out.push({ id: `${map.id}-${slot}`, slot, name, meta, x: pos.x, y: pos.y, aggro: meta.aggressive });
   });
   return out;
 }

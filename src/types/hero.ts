@@ -125,6 +125,8 @@ export interface Hero {
   /** Ids of heroes who landed a hit on this hero, this round (being built) / last round (snapshot for checks). */
   attackedByThisRound?: string[];
   attackedByLastRound?: string[];
+  /** Per-card-id rounds remaining before this hero may use that skill again (e.g. Field Reversal's 2-round lockout). Decremented once per endRound(), entries removed at 0. */
+  skillCooldowns?: Record<string, number>;
 
   // Player-only: deck/hand/discard cycle. Absent on enemies.
   hasUltimate?: boolean;

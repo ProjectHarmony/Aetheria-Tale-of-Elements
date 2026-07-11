@@ -5,19 +5,19 @@ import { HandZone } from './HandZone';
 
 interface HandSectionProps {
   battle: BattleState;
-  onPlayCard: (cardId: string) => void;
+  onSelectCard: (cardId: string) => void;
 }
 
 /** Owns the card-type filter selection (a pure UI preference, not game
  *  state) and composes the filter chips with the hand — mirrors the
  *  original's separate-but-adjacent .filters/.hand-zone rows. */
-export function HandSection({ battle, onPlayCard }: HandSectionProps) {
+export function HandSection({ battle, onSelectCard }: HandSectionProps) {
   const [filter, setFilter] = useState<FilterKey>('all');
 
   return (
     <>
       <FilterChips active={filter} onChange={setFilter} />
-      <HandZone battle={battle} filter={filter} onPlayCard={onPlayCard} />
+      <HandZone battle={battle} filter={filter} onSelectCard={onSelectCard} />
     </>
   );
 }

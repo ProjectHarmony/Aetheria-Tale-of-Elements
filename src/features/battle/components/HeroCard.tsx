@@ -109,12 +109,23 @@ export function HeroCard({ hero, side, isSelected, planLabel, isPass, orderRank,
             {!isPass && <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />}
             {isPass ? 'Pass' : planLabel}
             {canUndo && (
-              <span
-                className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white/15 font-extrabold"
+              <motion.button
+                type="button"
+                aria-label={isPass ? 'Undo pass' : 'Undo this scroll'}
+                whileHover={{ scale: 1.12 }}
+                whileTap={{ scale: 0.85 }}
+                // The visible chip stays small (matches the badge's own
+                // scale), but the actual hit target is padded well past it —
+                // a 14px dot was too easy to miss on a real touchscreen and
+                // mis-tap the hero card underneath instead (which just
+                // re-selects the hero without undoing anything).
+                className="relative -m-1.5 flex h-7 w-7 flex-shrink-0 items-center justify-center"
                 onClick={(e) => { e.stopPropagation(); onUndo?.(); }}
               >
-                ↩
-              </span>
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-danger)]/85 text-[9px] font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.25)]">
+                  ↩
+                </span>
+              </motion.button>
             )}
           </motion.div>
         )}

@@ -12,8 +12,8 @@ import {
   createInitialBattleState,
   heroById,
   pickAutoTarget,
+  reopenHeroForEditing,
   resolveRound,
-  selectHeroForPlanning,
   syncPlanningHero,
   undoLastCast,
 } from '@/systems/battle';
@@ -33,7 +33,9 @@ interface BattleStore {
   startDemoBattle: () => void;
   startBattle: (players: Hero[], enemies: Hero[], runtimeCards: Record<string, Card>, enemyDmgScale?: number) => void;
   selectHero: (heroId: string) => void;
-  playCard: (cardId: string) => void;
+  selectCard: (cardId: string) => void;
+  confirmCard: () => void;
+  cancelCard: () => void;
   pass: () => void;
   attack: () => void;
   undo: (heroId: string) => void;
@@ -123,21 +125,44 @@ export const useBattleStore = create<BattleStore>((set, get) => {
     selectHero: (heroId) => {
       const battle = get().battle;
       if (!battle) return;
-      selectHeroForPlanning(battle, heroId);
+      reopenHeroForEditing(battle, heroId);
       publish(battle);
     },
 
-    playCard: (cardId) => {
+    // Tapping a card only STAGES it (highlighted, not committed) — tapping
+    // the same card again un-stages it; tapping a different card just swaps
+    // the staged pick. Nothing is spent/discarded/advanced until confirmCard().
+    selectCard: (cardId) => {
       const battle = get().battle;
       if (!battle || battle.phase !== 'planning' || !battle.planningHeroId) return;
       const hero = heroById(battle, battle.planningHeroId);
       const card = cardById(battle, cardId);
       if (!hero || !card) return;
-      // Reject a stale/duplicate play for a card this hero can no longer
-      // actually cast (already played, no longer affordable, wrong hero) —
-      // a UI event firing twice for the same card must not double-spend.
       const stillPlayable = cardsForHero(battle, hero).some((c) => c.id === cardId);
       if (!stillPlayable || card.cost > battle.energy + battle.soul) return;
+      battle.pendingCardId = battle.pendingCardId === cardId ? null : cardId;
+      publish(battle);
+    },
+
+    cancelCard: () => {
+      const battle = get().battle;
+      if (!battle || !battle.pendingCardId) return;
+      battle.pendingCardId = null;
+      publish(battle);
+    },
+
+    // Commits whatever card selectCard staged — same auto-target + spend/
+    // discard/advance logic the old immediate-commit playCard used, just
+    // gated behind an explicit confirm tap.
+    confirmCard: () => {
+      const battle = get().battle;
+      if (!battle || battle.phase !== 'planning' || !battle.planningHeroId || !battle.pendingCardId) return;
+      const hero = heroById(battle, battle.planningHeroId);
+      const card = cardById(battle, battle.pendingCardId);
+      if (!hero || !card) { battle.pendingCardId = null; publish(battle); return; }
+      // Re-validate in case state shifted while the card sat staged (e.g. energy spent elsewhere).
+      const stillPlayable = cardsForHero(battle, hero).some((c) => c.id === card.id);
+      if (!stillPlayable || card.cost > battle.energy + battle.soul) { battle.pendingCardId = null; publish(battle); return; }
 
       if (card.kind === 'buff') {
         commitPlannedCast(battle, hero.id, card.id, hero.id);
@@ -147,7 +172,7 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       }
 
       const target = pickAutoTarget(battle.enemies, card);
-      if (!target) return;
+      if (!target) { battle.pendingCardId = null; publish(battle); return; }
       commitPlannedCast(battle, hero.id, card.id, target.id);
       syncPlanningHero(battle);
       publish(battle, { type: 'autoTarget', targetId: target.id });

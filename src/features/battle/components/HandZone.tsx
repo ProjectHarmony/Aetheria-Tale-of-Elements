@@ -7,10 +7,10 @@ import type { FilterKey } from './FilterChips';
 interface HandZoneProps {
   battle: BattleState;
   filter: FilterKey;
-  onPlayCard: (cardId: string) => void;
+  onSelectCard: (cardId: string) => void;
 }
 
-export function HandZone({ battle, filter, onPlayCard }: HandZoneProps) {
+export function HandZone({ battle, filter, onSelectCard }: HandZoneProps) {
   if (battle.phase !== 'planning') {
     return <div className="w-full px-4 py-6 text-center text-[11px] font-semibold text-[#2c1f3d]/80">Resolving the round — scrolls are locked.</div>;
   }
@@ -38,7 +38,13 @@ export function HandZone({ battle, filter, onPlayCard }: HandZoneProps) {
           instance unique for the animation layer's identity tracking. */}
       <AnimatePresence initial={false}>
         {cards.map((c) => (
-          <Card key={`${battle.planningHeroId}-${c.id}`} card={c} affordable={budget >= c.cost} onTap={() => onPlayCard(c.id)} />
+          <Card
+            key={`${battle.planningHeroId}-${c.id}`}
+            card={c}
+            affordable={budget >= c.cost}
+            isSelected={battle.pendingCardId === c.id}
+            onTap={() => onSelectCard(c.id)}
+          />
         ))}
       </AnimatePresence>
     </div>

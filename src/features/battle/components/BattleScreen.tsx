@@ -23,7 +23,9 @@ export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRe
   const battle = useBattleStore((s) => s.battle);
   const events = useBattleStore((s) => s.events);
   const selectHero = useBattleStore((s) => s.selectHero);
-  const playCard = useBattleStore((s) => s.playCard);
+  const selectCard = useBattleStore((s) => s.selectCard);
+  const confirmCard = useBattleStore((s) => s.confirmCard);
+  const cancelCard = useBattleStore((s) => s.cancelCard);
   const pass = useBattleStore((s) => s.pass);
   const attack = useBattleStore((s) => s.attack);
   const undo = useBattleStore((s) => s.undo);
@@ -57,8 +59,8 @@ export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRe
       </div>
 
       <div className="bl-hand">
-        <HandSection battle={battle} onPlayCard={playCard} />
-        <CtaBar battle={battle} onPass={pass} onAttack={attack} />
+        <HandSection battle={battle} onSelectCard={selectCard} />
+        <CtaBar battle={battle} onPass={pass} onAttack={attack} onConfirmCard={confirmCard} onCancelCard={cancelCard} />
       </div>
 
       <ActionBanner battle={battle} events={events} />

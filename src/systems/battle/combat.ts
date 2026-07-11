@@ -394,6 +394,13 @@ export function tickHeroStatuses(h: Hero): BattleEvent[] {
     h.dodgeBuffRoundsLeft = (h.dodgeBuffRoundsLeft ?? 0) - 1;
     if (h.dodgeBuffRoundsLeft <= 0) { h.dodgeBuffRoundsLeft = 0; h.dodgeBuffExtra = 0; }
   }
+  if (h.skillCooldowns) {
+    for (const id of Object.keys(h.skillCooldowns)) {
+      const left = h.skillCooldowns[id]! - 1;
+      if (left <= 0) delete h.skillCooldowns[id];
+      else h.skillCooldowns[id] = left;
+    }
+  }
   h.forceFavoredRound = false;
   h.dmgReductionRoundExtra = 0;
   h.damagedThisRound = false;

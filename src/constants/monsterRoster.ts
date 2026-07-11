@@ -10,7 +10,7 @@ import { computeMonsterStats } from './monsterFormulas';
  */
 const R = (name: string, role: MonsterRosterEntry['role'], element: MonsterRosterEntry['element'], level: number, tier: MonsterRosterEntry['tier'], subtype: MonsterRosterEntry['subtype'], aggressive: boolean): MonsterRosterEntry => ({ name, role, element, level, tier, subtype, aggressive });
 
-export const MONSTER_ROSTER: MonsterRosterEntry[] = [
+const MONSTER_ROSTER_RAW: MonsterRosterEntry[] = [
   // ---- Regular (45) ----
   R('Skarn', 'Tank', 'fire', 1, 'regular', 'Field', true),
   R('Volthak', 'Tactician', 'water', 2, 'regular', 'Field', true),
@@ -111,6 +111,37 @@ export const MONSTER_ROSTER: MonsterRosterEntry[] = [
   R('Marendil', 'Tactician', 'fire', 68, 'miniboss', 'Boss Underling', false),
   R('Coswraith', 'Tactician', 'water', 74, 'miniboss', 'Boss Underling', false),
 ];
+
+/**
+ * Population Pyramid — a Regular-tier Field species is never a single spawn:
+ * it's a 3-level population sharing one stat identity (role/element) but
+ * each level gets its own Level (relative to the species' own authored
+ * Level, so danger still scales exactly the way the base roster already
+ * ordered it) and its own aggro behavior:
+ *   base Level      "Juvenile" (no suffix) — non-aggressive, most common (x20/map)
+ *   base Level + 2  "(Adult)"              — aggressive, the normal fight (x10/map)
+ *   base Level + 14 "(Elder)"              — aggressive, rare — NOT guaranteed
+ *                                             near its own species; see the
+ *                                             sparse cross-map placement in
+ *                                             constants/maps.ts
+ * Elite/Mini-Boss/Boss/Underling entries are untouched by this expansion.
+ */
+interface PopulationLevelDef { levelOffset: number; suffix: string; aggressive: boolean }
+export const POPULATION_LEVELS: PopulationLevelDef[] = [
+  { levelOffset: 0, suffix: '', aggressive: false },
+  { levelOffset: 2, suffix: ' (Adult)', aggressive: true },
+  { levelOffset: 14, suffix: ' (Elder)', aggressive: true },
+];
+/** Individuals placed per population level, per map that hosts them — see constants/maps.ts placement pass. */
+export const POPULATION_COUNTS: Record<string, number> = { '': 20, ' (Adult)': 10, ' (Elder)': 1 };
+
+function expandRegularFieldEntry(entry: MonsterRosterEntry): MonsterRosterEntry[] {
+  return POPULATION_LEVELS.map((lvl) => ({ ...entry, name: entry.name + lvl.suffix, level: entry.level + lvl.levelOffset, aggressive: lvl.aggressive }));
+}
+
+export const MONSTER_ROSTER: MonsterRosterEntry[] = MONSTER_ROSTER_RAW.flatMap((entry) =>
+  entry.tier === 'regular' && entry.subtype === 'Field' ? expandRegularFieldEntry(entry) : [entry],
+);
 
 export const MONSTER_ROSTER_BY_NAME: Record<string, MonsterRosterEntry> = {};
 MONSTER_ROSTER.forEach((m) => { MONSTER_ROSTER_BY_NAME[m.name] = m; });

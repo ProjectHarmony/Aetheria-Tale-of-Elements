@@ -37,17 +37,15 @@ export function commitPlannedCast(state: BattleState, actorId: string, cardId: s
   }
 }
 
-export function undoLastCast(state: BattleState, heroId: string): void {
-  if (state.phase !== 'planning') return;
+/** Pops a hero's most recent committed cast, refunding its energy/soul cost
+ *  and restoring the card to hand (undoes exactly what commitPlannedCast
+ *  spent/discarded). Returns the popped card's id, or null if the hero had
+ *  nothing queued — shared by the full-undo and reopen-for-editing paths so
+ *  they can't drift apart on the refund math. */
+function popLastCast(state: BattleState, heroId: string): string | null {
   const h = heroById(state, heroId);
-  if (!h) return;
   const plan = state.plans[heroId];
-
-  if (!Array.isArray(plan) || plan.length === 0) {
-    state.heroDone[heroId] = false;
-    selectHeroForPlanning(state, heroId);
-    return;
-  }
+  if (!h || !Array.isArray(plan) || plan.length === 0) return null;
 
   const last = plan.pop()!;
   state.energy = Math.min(state.maxEnergy, state.energy + (last.fromEnergy || 0));
@@ -62,7 +60,16 @@ export function undoLastCast(state: BattleState, heroId: string): void {
       h.hand.push(card.id);
     }
   }
+  return card?.id ?? null;
+}
 
+/** The small ↩ button above a hero's head: fully undoes their last cast (or
+ *  un-passes them) with no re-staging — hand goes back to unselected. */
+export function undoLastCast(state: BattleState, heroId: string): void {
+  if (state.phase !== 'planning') return;
+  const h = heroById(state, heroId);
+  if (!h) return;
+  popLastCast(state, heroId);
   state.heroDone[heroId] = false;
   state.pendingCardId = null;
   selectHeroForPlanning(state, heroId);
@@ -75,6 +82,23 @@ export function selectHeroForPlanning(state: BattleState, heroId: string): void 
   if (!h || !h.alive || !state.players.some((p) => p.id === heroId)) return;
   state.planningHeroId = heroId;
   state.pendingCardId = null;
+}
+
+/** Tapping a hero's own portrait to revisit them: if they already have a
+ *  committed cast this round, reopen it as a staged (highlighted) pick —
+ *  refunded back into their hand — so the player sees exactly what they
+ *  chose and can Cancel/swap it via the normal select→confirm flow, rather
+ *  than tapping their portrait and finding no trace of the pick. A passed
+ *  hero just un-passes; a hero who hasn't acted yet just switches focus. */
+export function reopenHeroForEditing(state: BattleState, heroId: string): void {
+  if (state.phase !== 'planning') return;
+  const h = heroById(state, heroId);
+  if (!h || !h.alive || !state.players.some((p) => p.id === heroId)) return;
+
+  const restagedCardId = popLastCast(state, heroId);
+  state.heroDone[heroId] = false;
+  state.planningHeroId = heroId;
+  state.pendingCardId = restagedCardId;
 }
 
 export function assignPass(state: BattleState, heroId: string): void {

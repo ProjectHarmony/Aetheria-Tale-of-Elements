@@ -98,7 +98,7 @@ export const BOSS_SIGNATURE_SKILLS: Record<string, BossSignatureDef> = {
 // TIER SKILLS — not Role-based, gated purely by Tier (+ 2 named exceptions).
 // ============================================================
 const FIELD_REVERSAL: { slug: string; name: string; cost: number; effect: SkillEffect } = {
-  slug: 'field_reversal', name: 'Field Reversal', cost: 2, effect: { swapRandomFrontBack: true },
+  slug: 'field_reversal', name: 'Field Reversal', cost: 2, effect: { swapRandomFrontBack: true, cooldownRounds: 2 },
 };
 const RUINOUS_CHARGE: { slug: string; name: string; cost: number; effect: SkillEffect } = {
   slug: 'ruinous_charge', name: 'Ruinous Charge', cost: 5, effect: { channelKind: 'ruinousCharge' },
@@ -147,11 +147,12 @@ function buildMonsterSkills(entry: MonsterRosterEntry, registry: Record<string, 
     }
   }
 
-  if (entry.tier === 'miniboss' || entry.tier === 'boss') {
+  // Boss-exclusive — Mini-Bosses (including Boss Underlings) no longer get Field Reversal.
+  if (entry.tier === 'boss') {
     skills.push({
       id: `${entry.name}::${FIELD_REVERSAL.slug}`, kind: 'buff', branch: 'Monster', tier: 1,
       cost: FIELD_REVERSAL.cost, maxRank: 1, prereqs: [], name: FIELD_REVERSAL.name,
-      desc: 'Swaps a random Front-row player with a random Back-row player.', effect: FIELD_REVERSAL.effect,
+      desc: 'Swaps a random Front-row player with a random Back-row player. 2-round cooldown after casting.', effect: FIELD_REVERSAL.effect,
     });
   }
   if (RUINOUS_CHARGE_NAMES.has(entry.name)) {

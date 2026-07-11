@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Roamer, Vec2 } from '@/types';
-import { BOSS_UNDERLINGS, HUB_MAP_ID, MAPS, MONSTER_META, RESPAWN_MS, UNDERLING_TO_BOSS } from '@/constants';
+import { BOSS_UNDERLINGS, HUB_MAP_ID, MAPS, MONSTER_META, RESPAWN_MS } from '@/constants';
 import {
   ambientDrift,
   computeArrivalSpawn,
@@ -18,6 +18,9 @@ import {
  *  whichever of the other 2 are currently present as roamers on this map. */
 export interface ActiveEncounter {
   mapId: string;
+  /** Parallel to `names` — -1 marks a battle-only member with no map slot of
+   *  its own (a Boss's Underlings), skipped by resolveEncounter's per-slot
+   *  respawn scheduling since they're tied to the Boss's own respawn instead. */
   slots: number[];
   names: string[];
 }
@@ -57,14 +60,13 @@ const bossDefeatedAt: Record<string, number> = {};
 let lastAmbientTick = 0;
 const AMBIENT_INTERVAL_MS = 2200;
 
-/** A Boss/Underling roamer always resolves as its whole trio, regardless of
- *  which one the player actually touched. */
-function encounterGroup(hitRoamer: Roamer, allRoamers: Roamer[]): Roamer[] {
-  const bossName = BOSS_UNDERLINGS[hitRoamer.name] ? hitRoamer.name : UNDERLING_TO_BOSS[hitRoamer.name];
-  if (!bossName) return [hitRoamer];
-  const underlings = BOSS_UNDERLINGS[bossName] ?? [];
-  const groupNames = new Set([bossName, ...underlings]);
-  return allRoamers.filter((r) => groupNames.has(r.name));
+/** A Boss roamer always pulls its 2 Underlings into the battle alongside it —
+ *  the Underlings never roam the map themselves (slot -1: no map presence,
+ *  no independent respawn tracking), they only exist as battle participants. */
+function encounterGroup(hitRoamer: Roamer): { slot: number; name: string }[] {
+  const underlings = BOSS_UNDERLINGS[hitRoamer.name];
+  if (!underlings) return [{ slot: hitRoamer.slot, name: hitRoamer.name }];
+  return [{ slot: hitRoamer.slot, name: hitRoamer.name }, ...underlings.map((name) => ({ slot: -1, name }))];
 }
 
 /** Only "where was I" + exploration progress persist — roamers, joystick
@@ -135,7 +137,7 @@ export const useMapStore = create<MapStore>()(
 
         const hit = findEncounter(nextPos, nextRoamers);
         if (hit) {
-          const group = encounterGroup(hit, nextRoamers);
+          const group = encounterGroup(hit);
           set({
             playerPos: nextPos,
             roamers: nextRoamers,
@@ -163,7 +165,7 @@ export const useMapStore = create<MapStore>()(
         if (locked || pendingEncounter) return;
         const hit = roamers.find((r) => r.id === roamerId);
         if (!hit) return;
-        const group = encounterGroup(hit, roamers);
+        const group = encounterGroup(hit);
         set({ pendingEncounter: true, locked: true, activeEncounter: { mapId, slots: group.map((r) => r.slot), names: group.map((r) => r.name) } });
       },
 
@@ -184,7 +186,7 @@ export const useMapStore = create<MapStore>()(
             const tier = name ? MONSTER_META[name]?.tier : undefined;
             if (tier === 'boss' && name) {
               bossDefeatedAt[name] = Date.now();
-            } else if (tier) {
+            } else if (tier && slot >= 0) {
               respawnAt[slotKey(activeEncounter.mapId, slot)] = Date.now() + RESPAWN_MS[tier];
             }
           });
