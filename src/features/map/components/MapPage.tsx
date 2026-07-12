@@ -40,6 +40,8 @@ export function MapPage() {
   const tick = useMapStore((s) => s.tick);
   const clearEncounter = useMapStore((s) => s.clearEncounter);
   const triggerEncounter = useMapStore((s) => s.triggerEncounter);
+  const resting = useMapStore((s) => s.resting);
+  const toggleRest = useMapStore((s) => s.toggleRest);
   const setBattleContext = useGameStore((s) => s.setBattleContext);
   const navigate = useNavigate();
   const rafRef = useRef<number>(0);
@@ -223,6 +225,14 @@ export function MapPage() {
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-1.5">
             <button
+              onClick={toggleRest}
+              className={`flex h-8 w-8 items-center justify-center rounded-full border text-base backdrop-blur-md ${
+                resting ? 'border-[var(--color-gold)] bg-[var(--color-gold)]/25' : 'border-white/15 bg-[#241a30]/80'
+              }`}
+            >
+              💤
+            </button>
+            <button
               onClick={() => setItemsOpen(true)}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[#241a30]/80 text-base backdrop-blur-md"
             >
@@ -238,6 +248,18 @@ export function MapPage() {
           <MinimapBadge mapId={mapId} visitedMaps={visitedMaps} onClick={() => setWorldMapOpen(true)} />
         </div>
       </div>
+
+      {resting && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute left-1/2 top-16 z-40 -translate-x-1/2 rounded-full border border-[var(--color-gold)]/50 bg-[#241a30]/90 px-4 py-1.5 text-center backdrop-blur-md"
+        >
+          <span className="font-['Baloo_2'] text-[11px] font-bold text-[var(--color-gold)]">
+            💤 Resting — +{map.safe ? 3 : 1} HP/s per mage
+          </span>
+        </motion.div>
+      )}
 
       <Joystick onChange={setJoyVec} />
 

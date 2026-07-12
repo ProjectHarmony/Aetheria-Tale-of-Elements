@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import type { ItemDef } from '@/types';
-import { STAT_META, type StatKey } from '@/constants';
+import { RARITY_COLOR, RARITY_LABEL, STAT_META, type StatKey } from '@/constants';
 
 const CATEGORY_LABEL: Record<ItemDef['category'], string> = {
   consumable: 'Consumable', equipment: 'Equipment', loot: 'Etc', soul: 'Soul Crystal', card: 'Card',
@@ -38,8 +38,12 @@ export function ItemDetailModal({ item, qty, onClose }: ItemDetailModalProps) {
             <div className="flex items-start gap-3">
               <span className="text-4xl">{item.icon}</span>
               <div className="min-w-0 flex-1">
-                <div className="font-['Baloo_2'] text-[15px] font-extrabold text-[#fff8f0]">{item.name}</div>
-                <div className="mt-0.5 text-[9.5px] font-bold uppercase tracking-wide text-white/40">{CATEGORY_LABEL[item.category]} · ×{qty}</div>
+                <div className="font-['Baloo_2'] text-[15px] font-extrabold" style={{ color: item.rarity ? RARITY_COLOR[item.rarity] : '#fff8f0' }}>{item.name}</div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-wide text-white/40">
+                  {item.rarity && <span style={{ color: RARITY_COLOR[item.rarity] }}>{RARITY_LABEL[item.rarity]}</span>}
+                  {item.rarity && <span>·</span>}
+                  <span>{CATEGORY_LABEL[item.category]} · ×{qty}</span>
+                </div>
               </div>
               <button onClick={onClose} className="flex-shrink-0 text-xl text-white/40">✕</button>
             </div>
@@ -51,10 +55,18 @@ export function ItemDetailModal({ item, qty, onClose }: ItemDetailModalProps) {
                     {STAT_META[k].icon} +{item.statBonus![k]} {STAT_META[k].name}
                   </span>
                 ))}
+                {!!item.bonusSkillRanks && (
+                  <span className="rounded-full border border-[var(--color-gold)]/40 bg-[var(--color-gold)]/10 px-2.5 py-1 text-[10px] font-bold text-[var(--color-gold)]">
+                    ✨ +{item.bonusSkillRanks} rank to invested skills
+                  </span>
+                )}
               </div>
             )}
             {item.category === 'consumable' && item.healAmount && (
               <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-2 text-center text-[10.5px] font-bold text-white/60">Heals {item.healAmount} HP · usable in battle</div>
+            )}
+            {!!item.reqLevel && (
+              <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-2 text-center text-[10.5px] font-bold text-white/60">🔒 Requires Lv {item.reqLevel} to equip/socket</div>
             )}
           </motion.div>
         </motion.div>

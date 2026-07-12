@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Element } from '@/types';
-import { ITEMS_BY_ID } from '@/constants';
 import { useBattleStore } from '@/stores/battleStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useMapStore } from '@/stores/mapStore';
-import { BattleScreen } from '@/features/battle';
+import { BattleScreen, type VictorySummary } from '@/features/battle';
 import { ResponsiveShell } from '@/layouts/ResponsiveShell';
 import { buildEncounterEnemyTeam, buildPlayerTeamFromParty, buildRandomEnemyTeam } from '@/systems/battle';
 import { avgPartyLevel } from '@/systems/party';
@@ -29,13 +28,13 @@ export function BattlePage() {
   const lootDropsRef = useRef<Record<string, number>>({});
   const encounterResolvedRef = useRef(false);
   const hpSyncedRef = useRef(false);
-  const [xpSummary, setXpSummary] = useState<string | undefined>(undefined);
+  const [summary, setSummary] = useState<VictorySummary | undefined>(undefined);
 
   useEffect(() => {
     xpGrantedRef.current = false;
     encounterResolvedRef.current = false;
     hpSyncedRef.current = false;
-    setXpSummary(undefined);
+    setSummary(undefined);
     if (battleContext && party) {
       const { heroes: players, runtimeCards } = buildPlayerTeamFromParty(party);
       const level = avgPartyLevel(party);
@@ -67,13 +66,12 @@ export function BattlePage() {
     addAeons(aeonsAmount);
     const lootEntries = Object.entries(lootDropsRef.current);
     lootEntries.forEach(([itemId, qty]) => addItem(itemId, qty));
-    const lootText = lootEntries.length
-      ? ` · 🎁 ${lootEntries.map(([itemId, qty]) => `${ITEMS_BY_ID[itemId]?.name ?? itemId}${qty > 1 ? ` x${qty}` : ''}`).join(', ')}`
-      : '';
-    setXpSummary(
-      `+${xpAmount} XP to each mage · +💰${aeonsAmount} Aeons${lootText}.` +
-        (ups.length ? ` 🎉 Level up: ${ups.map((u) => `${u.el} → Lv ${u.level}`).join(', ')}` : ''),
-    );
+    setSummary({
+      xp: xpAmount,
+      aeons: aeonsAmount,
+      loot: lootEntries.map(([itemId, qty]) => ({ itemId, qty })),
+      levelUps: ups,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [won, battleContext]);
 
@@ -124,7 +122,7 @@ export function BattlePage() {
 
   return (
     <ResponsiveShell>
-      {battle && <BattleScreen restartLabel={restartLabel} xpSummary={xpSummary} onRestart={handleRestart} />}
+      {battle && <BattleScreen restartLabel={restartLabel} summary={summary} onRestart={handleRestart} />}
     </ResponsiveShell>
   );
 }

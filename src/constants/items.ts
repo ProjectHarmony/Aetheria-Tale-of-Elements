@@ -1,5 +1,6 @@
 import type { GearSlot, ItemDef } from '@/types';
 import { MONSTER_LOOT_ITEMS } from './monsterLoot';
+import { MONSTER_CARD_ITEMS, MONSTER_CRIMSON_ITEMS, MONSTER_EQUIPMENT_ITEMS } from './monsterGear';
 
 /**
  * Hand-authored starter item catalog — a small set per category so the
@@ -103,7 +104,13 @@ const HAND_ITEMS: Record<string, ItemDef> = {
 
 /** The full catalog — hand-authored items plus one procedurally-generated
  *  sellable loot item per monster species (see monsterLoot.ts). */
-export const ITEMS_BY_ID: Record<string, ItemDef> = { ...HAND_ITEMS, ...MONSTER_LOOT_ITEMS };
+export const ITEMS_BY_ID: Record<string, ItemDef> = {
+  ...HAND_ITEMS,
+  ...MONSTER_LOOT_ITEMS,
+  ...MONSTER_EQUIPMENT_ITEMS,
+  ...MONSTER_CARD_ITEMS,
+  ...MONSTER_CRIMSON_ITEMS,
+};
 
 /** Purchasable at Crown Haven City's shop, in listed order. */
 export const SHOP_BUY_ITEMS: string[] = ['minor_healing_draught', 'healing_draught', 'town_portal_scroll'];

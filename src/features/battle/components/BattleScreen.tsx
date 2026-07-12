@@ -11,16 +11,16 @@ import { PlanPrompt } from './PlanPrompt';
 import { HandSection } from './HandSection';
 import { CtaBar } from './CtaBar';
 import { ActionBanner } from './ActionBanner';
-import { EndOverlay } from './EndOverlay';
+import { EndOverlay, type VictorySummary } from './EndOverlay';
 import { ItemsSheet } from './ItemsSheet';
 
 interface BattleScreenProps {
   restartLabel?: string;
-  xpSummary?: string;
+  summary?: VictorySummary;
   onRestart?: () => void;
 }
 
-export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRestart }: BattleScreenProps) {
+export function BattleScreen({ restartLabel = '🔄 New Battle', summary, onRestart }: BattleScreenProps) {
   const battle = useBattleStore((s) => s.battle);
   const events = useBattleStore((s) => s.events);
   const selectHero = useBattleStore((s) => s.selectHero);
@@ -67,7 +67,7 @@ export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRe
       </div>
 
       <ActionBanner battle={battle} events={events} />
-      <EndOverlay battle={battle} restartLabel={restartLabel} xpSummary={xpSummary} onRestart={onRestart ?? startDemoBattle} />
+      <EndOverlay battle={battle} restartLabel={restartLabel} summary={summary} onRestart={onRestart ?? startDemoBattle} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ItemsSheet open={itemsOpen} battle={battle} onClose={() => setItemsOpen(false)} onUse={useConsumable} />
     </div>

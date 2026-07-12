@@ -2,7 +2,7 @@ import type { ItemDef } from '@/types';
 import { MONSTER_ROSTER_RAW } from './monsterRoster';
 
 /** Chance an individually-defeated monster drops its own unique loot item, checked once per monster in a won encounter. */
-export const MONSTER_LOOT_DROP_CHANCE = 0.3;
+export const MONSTER_LOOT_DROP_CHANCE = 0.7;
 
 /** Flavor noun per Role, shared with the roster's own Role taxonomy (see
  *  monsterRoster.ts's ROLE_ICON) so loot names stay formula-driven rather

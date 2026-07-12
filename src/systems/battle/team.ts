@@ -25,6 +25,7 @@ import {
   STARTING_ENERGY,
   STAT_POINTS_PER_LEVEL,
   STAT_SCALE,
+  rollMonsterEquipmentDrops,
   rollMonsterLoot,
   skillToCard,
   statsFor,
@@ -117,13 +118,31 @@ export function gearStatBonus(mage: MageState): Required<ItemStatBonus> {
   return total;
 }
 
+/** Highest `bonusSkillRanks` across every worn/socketed piece (Mini-Boss+
+ *  drops only) — flat, not additive across multiple pieces, so stacking
+ *  several rare items can't compound into an ever-growing rank bonus; one
+ *  generous "your best rare drop's" amplifier is already the intended
+ *  off-balance perk. Never unlocks a skill from 0 (see PASSIVE_KEYS/actives
+ *  callers below, both already gated on rank > 0). */
+export function gearSkillRankBonus(mage: MageState): number {
+  let best = 0;
+  (Object.keys(mage.gear ?? {}) as GearSlot[]).forEach((slot) => {
+    const worn: EquippedGear | null = mage.gear?.[slot] ?? null;
+    if (!worn) return;
+    best = Math.max(best, ITEMS_BY_ID[worn.itemId]?.bonusSkillRanks ?? 0);
+    worn.socketedIds.forEach((id) => { best = Math.max(best, ITEMS_BY_ID[id]?.bonusSkillRanks ?? 0); });
+  });
+  return best;
+}
+
 export function derivedStatsFor(el: Element, mage: MageState): DerivedStats {
   const s = mage.stats;
   const gear = gearStatBonus(mage);
+  const rankBonus = gearSkillRankBonus(mage);
   const passiveSkills = SKILL_TREES[el].filter((k) => k.kind === 'passive' && (mage.ranks[k.id] || 0) > 0);
 
   const sum = (key: 'blockOnAttack' | 'execBonus' | 'reflect' | 'dmgReduction' | 'regen' | 'dodgeUp' | 'speedUp' | 'accUp' | 'maxHpUpPct' | PassiveKnobKey) =>
-    passiveSkills.reduce((v, p) => v + (p.effect?.[key] || 0) * (mage.ranks[p.id] || 0), 0);
+    passiveSkills.reduce((v, p) => v + (p.effect?.[key] || 0) * Math.min(p.maxRank, (mage.ranks[p.id] || 0) + rankBonus), 0);
 
   // Thresholds are fixed cutoffs, not rank-scaled sums — take whichever owned passive defines one.
   const lowHpThreshold = passiveSkills.find((p) => p.effect?.lowHpThreshold !== undefined)?.effect?.lowHpThreshold ?? 0.5;
@@ -155,11 +174,12 @@ export function buildPlayerTeamFromParty(party: Party): { heroes: Hero[]; runtim
     const mage = party.mages[el];
     if (!mage) throw new Error(`Party is missing mage state for element "${el}"`);
     const d = derivedStatsFor(el, mage);
+    const rankBonus = gearSkillRankBonus(mage);
     const actives = equippedActives(mage, el);
-    actives.forEach((s) => { runtimeCards[s.id] = skillToCard(s, skillRank(mage, s.id), el); });
+    actives.forEach((s) => { runtimeCards[s.id] = skillToCard(s, Math.min(s.maxRank, skillRank(mage, s.id) + rankBonus), el); });
     const ult = SKILL_TREES[el].find((s) => s.kind === 'ultimate')!;
     const hasUltimate = ultimateUnlocked(mage, el);
-    if (hasUltimate) runtimeCards[ult.id] = skillToCard(ult, skillRank(mage, ult.id) || 1, el);
+    if (hasUltimate) runtimeCards[ult.id] = skillToCard(ult, Math.min(ult.maxRank, (skillRank(mage, ult.id) || 1) + rankBonus), el);
 
     // Pokemon-style HP: carries over from the last Adventure battle instead
     // of auto-healing to full — clamped in case maxHp shrank (gear removed,
@@ -341,6 +361,11 @@ export function buildEncounterEnemyTeam(
 
   const xpReward = known.reduce((sum, m) => sum + Math.round((TIER_XP[m.tier] ?? 60) * xpGapMultiplier(m.level, partyLevel)), 0);
   const aeonsReward = known.reduce((sum, m) => sum + (AEON_TIER_REWARD[m.tier] ?? 8), 0);
-  const lootDrops = rollMonsterLoot(known.map((m) => m.name));
+  // Trophy loot (always rollable) plus the rarer Equipment/Card/Crimson-Card
+  // rolls — merged into one bag since both just resolve to "stuff you found"
+  // in the Victory summary/inventory, no separate plumbing needed downstream.
+  const names = known.map((m) => m.name);
+  const lootDrops: Record<string, number> = { ...rollMonsterLoot(names) };
+  Object.entries(rollMonsterEquipmentDrops(names)).forEach(([id, qty]) => { lootDrops[id] = (lootDrops[id] ?? 0) + qty; });
   return { enemies, xpReward, aeonsReward, lootDrops, dmgScale: 1 };
 }

@@ -52,6 +52,9 @@ interface GameStore {
   /** Heals the party's lowest-HP% mage directly from the overworld (no
    *  battle/turn structure out here, unlike battleStore.useConsumable). */
   healFromMap: (itemId: string) => boolean;
+  /** Regenerates every party mage by a flat HP amount, clamped to their own
+   *  max — used by mapStore's Rest tick (see toggleRest), once per second. */
+  regenParty: (amountPerMage: number) => void;
 }
 
 const DEFAULT_GEAR: Record<GearSlot, EquippedGear | null> = { head: null, robe: null, cape: null, weapon: null, acc1: null, acc2: null };
@@ -215,6 +218,7 @@ export const useGameStore = create<GameStore>()(
         const def = ITEMS_BY_ID[itemId];
         if (!party || !mage || !def || def.category !== 'equipment' || !def.slot) return false;
         if ((inventory[itemId] ?? 0) <= 0) return false;
+        if (mage.level < (def.reqLevel ?? 0)) return false;
 
         const slot = def.slot;
         const previous = mage.gear[slot];
@@ -260,6 +264,7 @@ export const useGameStore = create<GameStore>()(
         const validPairing = (def.category === 'card' && CARD_SOCKET_SLOTS.includes(slot)) || (def.category === 'soul' && slot === SOUL_SOCKET_SLOT);
         if (!validPairing) return false;
         if ((inventory[itemId] ?? 0) <= 0) return false;
+        if (mage.level < (def.reqLevel ?? 0)) return false;
 
         const nextInventory = { ...inventory };
         nextInventory[itemId] = (nextInventory[itemId] ?? 0) - 1;
@@ -341,6 +346,24 @@ export const useGameStore = create<GameStore>()(
           party: { ...party, mages: { ...party.mages, [woundedEl]: { ...mage, currentHp: Math.min(maxHp, hp + def.healAmount) } } },
         });
         return true;
+      },
+
+      regenParty: (amountPerMage) => {
+        const { party } = get();
+        if (!party || amountPerMage <= 0) return;
+        const mages = { ...party.mages };
+        let changed = false;
+        party.picks.forEach((el) => {
+          const mage = mages[el];
+          if (!mage) return;
+          const maxHp = derivedStatsFor(el, mage).maxHp;
+          const hp = Math.max(0, Math.min(maxHp, mage.currentHp ?? maxHp));
+          if (hp < maxHp) {
+            mages[el] = { ...mage, currentHp: Math.min(maxHp, hp + amountPerMage) };
+            changed = true;
+          }
+        });
+        if (changed) set({ party: { ...party, mages } });
       },
     }),
     {

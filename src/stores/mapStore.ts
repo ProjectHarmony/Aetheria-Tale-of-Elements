@@ -12,6 +12,13 @@ import {
   slotKey,
   stepAggro,
 } from '@/systems/map';
+import { useGameStore } from './gameStore';
+
+/** HP/sec regenerated to every party mage while Resting — safer, faster in
+ *  Crown Haven City; slower (and still interruptible by a roaming monster)
+ *  everywhere else in the field. */
+const REST_HP_PER_SEC = { safe: 3, field: 1 };
+const REST_TICK_MS = 1000;
 
 /** A Boss + its 2 Underlings always fight together (always exactly 3,
  *  matching the player's 3v3) — walking into any one of the trio pulls in
@@ -42,6 +49,10 @@ interface MapStore {
   initialized: boolean;
   visitedMaps: string[];
   areaBanner: AreaBanner | null;
+  /** Standing still and recovering HP over time — see REST_HP_PER_SEC. Movement
+   *  input is ignored entirely while resting (you can't drift off mid-heal);
+   *  only the Rest button (toggleRest) or an interrupting encounter ends it. */
+  resting: boolean;
 
   enterMap: (mapId: string, spawn?: Vec2) => void;
   changeMap: (mapId: string, spawn: Vec2) => void;
@@ -53,6 +64,7 @@ interface MapStore {
   /** Instantly warps the player to Crown Haven City — used by a Town Portal
    *  Scroll (see MapItemsSheet) and shared with resolveEncounter's loss path. */
   warpToHub: () => void;
+  toggleRest: () => void;
 }
 
 // Session-only (never persisted, matching the original's plain in-memory
@@ -62,6 +74,7 @@ const respawnAt: Record<string, number> = {};
 const bossDefeatedAt: Record<string, number> = {};
 let lastAmbientTick = 0;
 const AMBIENT_INTERVAL_MS = 2200;
+let lastRestTick = 0;
 
 /** A Boss roamer always pulls its 2 Underlings into the battle alongside it —
  *  the Underlings never roam the map themselves (slot -1: no map presence,
@@ -88,6 +101,7 @@ export const useMapStore = create<MapStore>()(
       initialized: false,
       visitedMaps: [HUB_MAP_ID],
       areaBanner: null,
+      resting: false,
 
       enterMap: (mapId, spawn) => {
         const map = MAPS[mapId];
@@ -101,6 +115,7 @@ export const useMapStore = create<MapStore>()(
           pendingEncounter: false,
           activeEncounter: null,
           initialized: true,
+          resting: false,
           visitedMaps: s.visitedMaps.includes(mapId) ? s.visitedMaps : [...s.visitedMaps, mapId],
         }));
       },
@@ -124,10 +139,46 @@ export const useMapStore = create<MapStore>()(
       setJoyVec: (vec) => set({ joyVec: vec }),
 
       tick: () => {
-        const { mapId, playerPos, roamers, joyVec, locked, pendingEncounter } = get();
+        const { mapId, playerPos, roamers, joyVec, locked, pendingEncounter, resting } = get();
         if (locked || pendingEncounter) return;
         const map = MAPS[mapId];
         if (!map) return;
+
+        // Resting locks the player in place — movement input is ignored
+        // entirely (no auto-cancel-on-move), so a stray joystick nudge can't
+        // accidentally cut a heal short. Only the Rest button or an
+        // interrupting encounter ends it. Roamers still aggro/drift/ambush as
+        // normal below — resting out in the field is real risk for a slower
+        // heal, not a free pause.
+        if (resting) {
+          const now = performance.now();
+          if (now - lastRestTick >= REST_TICK_MS) {
+            lastRestTick = now;
+            useGameStore.getState().regenParty(map.safe ? REST_HP_PER_SEC.safe : REST_HP_PER_SEC.field);
+          }
+
+          let nextRoamers = stepAggro(roamers, map, playerPos, 4.5);
+          if (now - lastAmbientTick >= AMBIENT_INTERVAL_MS) {
+            lastAmbientTick = now;
+            nextRoamers = ambientDrift(nextRoamers, map);
+          }
+
+          const hit = findEncounter(playerPos, nextRoamers);
+          if (hit) {
+            const group = encounterGroup(hit);
+            set({
+              roamers: nextRoamers,
+              pendingEncounter: true,
+              locked: true,
+              resting: false,
+              activeEncounter: { mapId, slots: group.map((r) => r.slot), names: group.map((r) => r.name) },
+            });
+            return;
+          }
+
+          set({ roamers: nextRoamers });
+          return;
+        }
 
         const nextPos = movePlayer(playerPos, joyVec, map);
         let nextRoamers = stepAggro(roamers, map, nextPos, 4.5);
@@ -169,7 +220,14 @@ export const useMapStore = create<MapStore>()(
         const hit = roamers.find((r) => r.id === roamerId);
         if (!hit) return;
         const group = encounterGroup(hit);
-        set({ pendingEncounter: true, locked: true, activeEncounter: { mapId, slots: group.map((r) => r.slot), names: group.map((r) => r.name) } });
+        set({ pendingEncounter: true, locked: true, resting: false, activeEncounter: { mapId, slots: group.map((r) => r.slot), names: group.map((r) => r.name) } });
+      },
+
+      toggleRest: () => {
+        const { locked, pendingEncounter, resting } = get();
+        if (locked || pendingEncounter) return;
+        if (!resting) lastRestTick = performance.now();
+        set({ resting: !resting });
       },
 
       clearEncounter: () => set({ pendingEncounter: false, locked: false, joyVec: { x: 0, y: 0 } }),

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Element, GearSlot, ItemCategory, MageState } from '@/types';
-import { ITEMS_BY_ID } from '@/constants';
+import { ITEMS_BY_ID, RARITY_COLOR } from '@/constants';
 import { useGameStore } from '@/stores/gameStore';
 
 const GEAR_SLOTS: { key: GearSlot; name: string; icon: string }[] = [
@@ -66,7 +66,7 @@ export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail, onOpenSocket 
               }`}
             >
               <div className="text-2xl" style={{ opacity: def ? 1 : 0.5 }}>{def?.icon ?? slot.icon}</div>
-              <div className="mt-1 font-['Baloo_2'] text-[11px] font-bold text-[#fff8f0]">{def?.name ?? slot.name}</div>
+              <div className="mt-1 font-['Baloo_2'] text-[11px] font-bold" style={{ color: def?.rarity ? RARITY_COLOR[def.rarity] : '#fff8f0' }}>{def?.name ?? slot.name}</div>
               {def?.socketCount ? (
                 <div className="mt-0.5 text-[8px] leading-snug text-white/35">{worn!.socketedIds.length}/{def.socketCount} sockets</div>
               ) : (
@@ -102,21 +102,26 @@ export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail, onOpenSocket 
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(10,minmax(0,1fr))] gap-1">
-          {bagItems.map(({ def, qty }) => (
-            <div
-              key={def.id}
-              draggable={def.category === 'equipment'}
-              onDragStart={(e) => e.dataTransfer.setData(DRAG_MIME, def.id)}
-              onDoubleClick={() => { if (def.category === 'card' || def.category === 'soul') onOpenSocket(def.id); }}
-              onContextMenu={(e) => { e.preventDefault(); onOpenDetail(def.id); }}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-md border border-white/12 bg-black/20 text-base ${def.category === 'equipment' ? 'cursor-grab active:cursor-grabbing' : ''}`}
-            >
-              {def.icon}
-              {qty > 1 && (
-                <span className="absolute bottom-0 right-0.5 font-['Baloo_2'] text-[7px] font-extrabold text-white/70">×{qty}</span>
-              )}
-            </div>
-          ))}
+          {bagItems.map(({ def, qty }) => {
+            const locked = mage.level < (def.reqLevel ?? 0);
+            return (
+              <div
+                key={def.id}
+                draggable={def.category === 'equipment'}
+                onDragStart={(e) => e.dataTransfer.setData(DRAG_MIME, def.id)}
+                onDoubleClick={() => { if (def.category === 'card' || def.category === 'soul') onOpenSocket(def.id); }}
+                onContextMenu={(e) => { e.preventDefault(); onOpenDetail(def.id); }}
+                className={`relative flex aspect-square flex-col items-center justify-center rounded-md border bg-black/20 text-base ${def.category === 'equipment' ? 'cursor-grab active:cursor-grabbing' : ''} ${locked ? 'opacity-50' : ''}`}
+                style={{ borderColor: def.rarity ? `${RARITY_COLOR[def.rarity]}80` : 'rgba(255,255,255,0.12)' }}
+              >
+                {def.icon}
+                {locked && <span className="absolute left-0.5 top-0.5 text-[8px]">🔒</span>}
+                {qty > 1 && (
+                  <span className="absolute bottom-0 right-0.5 font-['Baloo_2'] text-[7px] font-extrabold text-white/70">×{qty}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       <div className="mt-2 text-center text-[9px] leading-snug text-white/30">

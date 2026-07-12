@@ -1,6 +1,11 @@
 /** The 5 backpack classifications the player asked for. */
 export type ItemCategory = 'consumable' | 'equipment' | 'loot' | 'soul' | 'card';
 
+/** Drop-tier flavor, purely presentational (color-coding in the UI) — mirrors
+ *  the monster Tier it dropped from (regular/elite/miniboss), plus a 5th
+ *  `legendary` step reserved for a Boss's ultra-rare Crimson Card. */
+export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
 /** 6 gear slots per mage: Headgear, Robe, Cape, Weapon, and 2 Accessories.
  *  Head/Robe/Cape each take 1 Card; Weapon takes up to 3 Soul Stones;
  *  Accessories have their own fixed effect and no sockets. */
@@ -43,6 +48,16 @@ export interface ItemDef {
   buyPrice?: number;
   /** Aeons the shop pays to buy this off the player — undefined = not sellable. */
   sellPrice?: number;
+  /** Minimum mage Level required to equip/socket this — undefined = no restriction. */
+  reqLevel?: number;
+  /** Equipment only — rare monster drops (Mini-Boss+) can add a flat bonus
+   *  to every skill the mage has ALREADY invested at least 1 point in
+   *  (active or passive), capped at that skill's own max rank. Never
+   *  unlocks a skill from scratch, only amplifies a choice the player
+   *  already made — the "slightly off-balance if you got lucky" perk. */
+  bonusSkillRanks?: number;
+  /** Presentational drop-tier — see ItemRarity. */
+  rarity?: ItemRarity;
 }
 
 /** One worn piece of gear plus whatever's currently socketed into it —
