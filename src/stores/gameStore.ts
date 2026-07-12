@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Account, BattleContext, Element, EquippedGear, GearSlot, Inventory, Party, Row } from '@/types';
-import { CARD_SOCKET_SLOTS, ITEMS_BY_ID, SOUL_SOCKET_SLOT, STARTER_INVENTORY, STARTING_RESPEC_TOKENS } from '@/constants';
+import { CARD_SOCKET_SLOTS, ITEMS_BY_ID, SOUL_SOCKET_SLOT, STARTER_INVENTORY, STARTING_AEONS, STARTING_RESPEC_TOKENS } from '@/constants';
 import type { FormationKey } from '@/constants/formations';
-import { newMageState } from '@/systems/battle';
+import { derivedStatsFor, newMageState } from '@/systems/battle';
 import { applyDraft, computePlacementAfterMove, grantPartyXp, partyPvpUnlocked, respecMage, type LevelUp, type MageDraft } from '@/systems/party';
 
 interface GameStore {
@@ -12,6 +12,8 @@ interface GameStore {
   party: Party | null;
   battleContext: BattleContext | null;
   inventory: Inventory;
+  /** Currency spent/earned at Crown Haven City's shop — see SHOP_BUY_ITEMS/AEON_TIER_REWARD. */
+  aeons: number;
 
   register: (username: string, password: string) => { ok: true } | { ok: false; error: string };
   login: (username: string, password: string) => { ok: true; hasParty: boolean } | { ok: false; error: string };
@@ -23,6 +25,10 @@ interface GameStore {
   isPvpUnlocked: () => boolean;
   grantXp: (amount: number) => LevelUp[];
   setBattleContext: (ctx: BattleContext | null) => void;
+  /** Persists each mage's HP after an Adventure battle (Pokemon-style — no
+   *  auto-heal between fights). Pass `{ el: hp }` for the real end-of-battle
+   *  values on a win, or force every picked mage to 1 on a full party wipe. */
+  syncPartyHp: (hpByEl: Partial<Record<Element, number>>) => void;
 
   setFormationType: (key: FormationKey) => void;
   moveMagePlacement: (el: Element, target: Row | null, targetOccupantEl?: Element) => void;
@@ -36,6 +42,16 @@ interface GameStore {
   unequipItem: (el: Element, slot: GearSlot) => void;
   socketItem: (el: Element, slot: GearSlot, itemId: string) => boolean;
   unsocketItem: (el: Element, slot: GearSlot, socketedItemId: string) => void;
+
+  /** Crown Haven City's shop — Buy spends Aeons for a purchasable item (see
+   *  SHOP_BUY_ITEMS/ItemDef.buyPrice); Sell pays Aeons for a Loot item (see
+   *  ItemDef.sellPrice). Both return false (no state change) if invalid. */
+  addAeons: (amount: number) => void;
+  buyItem: (itemId: string, qty?: number) => boolean;
+  sellItem: (itemId: string, qty?: number) => boolean;
+  /** Heals the party's lowest-HP% mage directly from the overworld (no
+   *  battle/turn structure out here, unlike battleStore.useConsumable). */
+  healFromMap: (itemId: string) => boolean;
 }
 
 /**
@@ -56,6 +72,7 @@ export const useGameStore = create<GameStore>()(
       party: null,
       battleContext: null,
       inventory: {},
+      aeons: 0,
 
       register: (username, password) => {
         const name = username.trim();
@@ -83,7 +100,7 @@ export const useGameStore = create<GameStore>()(
       createParty: (picks, placements, formationType) => {
         const mages: Party['mages'] = {};
         picks.forEach((el) => { mages[el] = newMageState(el); });
-        set({ party: { picks, placements, mages, formationType }, inventory: { ...STARTER_INVENTORY } });
+        set({ party: { picks, placements, mages, formationType }, inventory: { ...STARTER_INVENTORY }, aeons: STARTING_AEONS });
       },
 
       respec: (el) => {
@@ -116,6 +133,18 @@ export const useGameStore = create<GameStore>()(
       },
 
       setBattleContext: (ctx) => set({ battleContext: ctx }),
+
+      syncPartyHp: (hpByEl) => {
+        const { party } = get();
+        if (!party) return;
+        const mages = { ...party.mages };
+        (Object.keys(hpByEl) as Element[]).forEach((el) => {
+          const mage = mages[el];
+          const hp = hpByEl[el];
+          if (mage && hp !== undefined) mages[el] = { ...mage, currentHp: Math.max(0, hp) };
+        });
+        set({ party: { ...party, mages } });
+      },
 
       setFormationType: (key) => {
         const { party } = get();
@@ -236,10 +265,66 @@ export const useGameStore = create<GameStore>()(
           party: { ...party, mages: { ...party.mages, [el]: { ...mage, gear: { ...mage.gear, [slot]: { ...worn, socketedIds: newSocketed } } } } },
         });
       },
+
+      addAeons: (amount) => set((s) => ({ aeons: Math.max(0, s.aeons + amount) })),
+
+      buyItem: (itemId, qty = 1) => {
+        const { aeons, inventory } = get();
+        const def = ITEMS_BY_ID[itemId];
+        if (!def || !def.buyPrice || qty <= 0) return false;
+        const cost = def.buyPrice * qty;
+        if (aeons < cost) return false;
+        set({ aeons: aeons - cost, inventory: { ...inventory, [itemId]: (inventory[itemId] ?? 0) + qty } });
+        return true;
+      },
+
+      sellItem: (itemId, qty = 1) => {
+        const { aeons, inventory } = get();
+        const def = ITEMS_BY_ID[itemId];
+        if (!def || !def.sellPrice || qty <= 0) return false;
+        const owned = inventory[itemId] ?? 0;
+        if (owned < qty) return false;
+        const nextInventory = { ...inventory };
+        const remaining = owned - qty;
+        if (remaining <= 0) delete nextInventory[itemId]; else nextInventory[itemId] = remaining;
+        set({ aeons: aeons + def.sellPrice * qty, inventory: nextInventory });
+        return true;
+      },
+
+      healFromMap: (itemId) => {
+        const { party, inventory } = get();
+        const def = ITEMS_BY_ID[itemId];
+        if (!party || !def || def.category !== 'consumable' || !def.healAmount) return false;
+        if ((inventory[itemId] ?? 0) <= 0) return false;
+
+        let woundedEl: Element | null = null;
+        let lowestPct = 1;
+        for (const el of party.picks) {
+          const mage = party.mages[el];
+          if (!mage) continue;
+          const maxHp = derivedStatsFor(el, mage).maxHp;
+          const hp = Math.max(0, Math.min(maxHp, mage.currentHp ?? maxHp));
+          const pct = maxHp > 0 ? hp / maxHp : 1;
+          if (pct < lowestPct) { lowestPct = pct; woundedEl = el; }
+        }
+        if (woundedEl === null) return false; // everyone already full
+
+        const mage = party.mages[woundedEl]!;
+        const maxHp = derivedStatsFor(woundedEl, mage).maxHp;
+        const hp = Math.max(0, Math.min(maxHp, mage.currentHp ?? maxHp));
+        const nextInventory = { ...inventory };
+        nextInventory[itemId] = (nextInventory[itemId] ?? 0) - 1;
+        if (nextInventory[itemId]! <= 0) delete nextInventory[itemId];
+        set({
+          inventory: nextInventory,
+          party: { ...party, mages: { ...party.mages, [woundedEl]: { ...mage, currentHp: Math.min(maxHp, hp + def.healAmount) } } },
+        });
+        return true;
+      },
     }),
     {
       name: 'two-elements-save',
-      partialize: (state) => ({ accounts: state.accounts, user: state.user, party: state.party, inventory: state.inventory }),
+      partialize: (state) => ({ accounts: state.accounts, user: state.user, party: state.party, inventory: state.inventory, aeons: state.aeons }),
     },
   ),
 );

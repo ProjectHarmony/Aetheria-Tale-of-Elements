@@ -26,6 +26,13 @@ export function WorldMapModal({ currentMapId, visitedMaps, onClose }: WorldMapMo
   const pendingAnchorRef = useRef<{ fracX: number; fracY: number; localX: number; localY: number } | null>(null);
   const zoomAnimRef = useRef<number | null>(null);
   const dragRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+  // Tracks whether the PRESS that started this click began on the backdrop
+  // itself (not the map/panel) — a click's `target` is the nearest common
+  // ancestor of press and release, so starting a drag inside `.wm-scroll`
+  // and releasing the mouse outside the modal (over the backdrop) was
+  // synthesizing a click whose target === the backdrop, closing the map
+  // mid-drag even though the user never intended to dismiss it.
+  const backdropPressRef = useRef(false);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -112,7 +119,14 @@ export function WorldMapModal({ currentMapId, visitedMaps, onClose }: WorldMapMo
   const canvasH = MAP_ART_SIZE.h * zoom;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+      onPointerDown={(e) => { backdropPressRef.current = e.target === e.currentTarget; }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && backdropPressRef.current) onClose();
+        backdropPressRef.current = false;
+      }}
+    >
       <div className="flex max-h-[85vh] w-full max-w-[520px] flex-col rounded-2xl border border-white/15 bg-[#1a1330] p-4 shadow-2xl">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-['Baloo_2'] text-[15px] font-extrabold text-white">🗺️ World Map</h2>

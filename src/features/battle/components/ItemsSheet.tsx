@@ -10,17 +10,21 @@ interface ItemsSheetProps {
   onUse: (itemId: string) => void;
 }
 
-/** Free-action Backpack popup, mid-battle — Consumables only (Equipment/
- *  Card/Soul are worn before a fight starts, from Party > Equipment; Loot
- *  has no in-battle use). Always heals the party's lowest-HP living mage,
- *  same auto-target convention the rest of battle UI already uses. */
+/** Backpack popup, mid-battle — healing Consumables only (Equipment/Card/
+ *  Soul are worn before a fight starts, from Party > Equipment; Loot has no
+ *  in-battle use; the Town Portal Scroll is overworld-only — see
+ *  MapItemsSheet — retreating out of a fight isn't implemented). Always
+ *  heals the party's lowest-HP living mage, same auto-target convention the
+ *  rest of battle UI already uses. Using one spends the currently-planning
+ *  hero's turn (same cost as Pass) — not a free action, so healing mid-fight
+ *  trades away that hero's attack for the round. */
 export function ItemsSheet({ open, battle, onClose, onUse }: ItemsSheetProps) {
   const inventory = useGameStore((s) => s.inventory);
   const consumables = Object.entries(inventory)
     .map(([id, qty]) => ({ def: ITEMS_BY_ID[id], qty }))
-    .filter((e): e is { def: NonNullable<typeof e.def>; qty: number } => !!e.def && e.def.category === 'consumable' && e.qty > 0);
+    .filter((e): e is { def: NonNullable<typeof e.def>; qty: number } => !!e.def && e.def.category === 'consumable' && !!e.def.healAmount && e.qty > 0);
 
-  const canUse = battle.phase === 'planning';
+  const canUse = battle.phase === 'planning' && !!battle.planningHeroId && !battle.pendingCardId;
   const allFull = battle.players.every((h) => !h.alive || h.hp >= h.maxHp);
 
   return (
@@ -45,8 +49,9 @@ export function ItemsSheet({ open, battle, onClose, onUse }: ItemsSheetProps) {
               <button onClick={onClose} className="text-xl text-white/40">✕</button>
             </div>
 
-            {!canUse && <div className="mb-3 text-[11px] text-white/50">Only usable while planning.</div>}
+            {!canUse && <div className="mb-3 text-[11px] text-white/50">{battle.pendingCardId ? 'Confirm or cancel your staged scroll first.' : 'Only usable while planning.'}</div>}
             {canUse && allFull && <div className="mb-3 text-[11px] text-white/50">Everyone's already at full HP.</div>}
+            {canUse && !allFull && <div className="mb-3 text-[11px] text-[var(--color-gold)]">Using an item spends this mage's turn — choose wisely.</div>}
 
             {consumables.length === 0 ? (
               <div className="py-4 text-center text-[11px] text-white/40">No consumables in your Backpack.</div>
@@ -57,7 +62,7 @@ export function ItemsSheet({ open, battle, onClose, onUse }: ItemsSheetProps) {
                     <span className="flex-shrink-0 text-2xl">{def.icon}</span>
                     <div className="min-w-0 flex-1">
                       <div className="font-['Baloo_2'] text-[12px] font-bold text-[#fff8f0]">{def.name} <span className="text-white/40">×{qty}</span></div>
-                      <div className="text-[10px] text-white/50">Heals {def.healAmount} HP</div>
+                      <div className="text-[10px] text-white/50">Heals {def.healAmount} HP · costs this mage's turn</div>
                     </div>
                     <button
                       onClick={() => onUse(def.id)}

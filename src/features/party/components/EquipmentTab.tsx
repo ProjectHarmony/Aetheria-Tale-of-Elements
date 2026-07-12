@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { GearSlot, ItemCategory, MageState } from '@/types';
+import type { Element, GearSlot, ItemCategory, MageState } from '@/types';
 import { ITEMS_BY_ID } from '@/constants';
 import { useGameStore } from '@/stores/gameStore';
 
@@ -8,26 +8,33 @@ const GEAR_SLOTS: { key: GearSlot; name: string; icon: string }[] = [
   { key: 'robe', name: 'Robe', icon: '👘' },
   { key: 'cape', name: 'Cape', icon: '🧣' },
   { key: 'weapon', name: 'Staff', icon: '🪄' },
-  { key: 'acc1', name: 'Accessory', icon: '💍' },
+  { key: 'acc1', name: 'Necklace', icon: '📿' },
   { key: 'acc2', name: 'Accessory', icon: '💍' },
 ];
 
 const CATEGORY_TABS: { key: ItemCategory; name: string; icon: string }[] = [
   { key: 'consumable', name: 'Consumable', icon: '🧪' },
   { key: 'equipment', name: 'Equipment', icon: '🎽' },
-  { key: 'loot', name: 'Loot', icon: '📜' },
-  { key: 'soul', name: 'Soul', icon: '🔥' },
+  { key: 'soul', name: 'Soul Crystal', icon: '🔥' },
   { key: 'card', name: 'Card', icon: '🃏' },
+  { key: 'loot', name: 'Etc', icon: '📦' },
 ];
 
+const DRAG_MIME = 'application/x-item-id';
+
 interface EquipmentTabProps {
+  el: Element;
   mage: MageState;
   onOpenSlot: (slot: GearSlot) => void;
+  onOpenDetail: (itemId: string) => void;
+  onOpenSocket: (itemId: string) => void;
 }
 
-export function EquipmentTab({ mage, onOpenSlot }: EquipmentTabProps) {
+export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail, onOpenSocket }: EquipmentTabProps) {
   const inventory = useGameStore((s) => s.inventory);
+  const equipItem = useGameStore((s) => s.equipItem);
   const [category, setCategory] = useState<ItemCategory>('equipment');
+  const [dragOverSlot, setDragOverSlot] = useState<GearSlot | null>(null);
 
   const bagItems = Object.entries(inventory)
     .map(([id, qty]) => ({ def: ITEMS_BY_ID[id], qty }))
@@ -45,7 +52,18 @@ export function EquipmentTab({ mage, onOpenSlot }: EquipmentTabProps) {
             <button
               key={slot.key}
               onClick={() => onOpenSlot(slot.key)}
-              className={`rounded-2xl border-[1.5px] p-3.5 text-center ${def ? 'border-white/25 bg-black/25' : 'border-dashed border-white/16 bg-black/20'}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOverSlot(slot.key); }}
+              onDragLeave={() => setDragOverSlot((s) => (s === slot.key ? null : s))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverSlot(null);
+                const itemId = e.dataTransfer.getData(DRAG_MIME);
+                const dropDef = itemId ? ITEMS_BY_ID[itemId] : null;
+                if (dropDef?.category === 'equipment' && dropDef.slot === slot.key) equipItem(el, itemId);
+              }}
+              className={`rounded-2xl border-[1.5px] p-3.5 text-center transition-colors ${
+                dragOverSlot === slot.key ? 'border-solid border-[var(--color-gold)] bg-[var(--color-gold)]/15' : def ? 'border-white/25 bg-black/25' : 'border-dashed border-white/16 bg-black/20'
+              }`}
             >
               <div className="text-2xl" style={{ opacity: def ? 1 : 0.5 }}>{def?.icon ?? slot.icon}</div>
               <div className="mt-1 font-['Baloo_2'] text-[11px] font-bold text-[#fff8f0]">{def?.name ?? slot.name}</div>
@@ -83,25 +101,27 @@ export function EquipmentTab({ mage, onOpenSlot }: EquipmentTabProps) {
           No {CATEGORY_TABS.find((t) => t.key === category)?.name} items in your Backpack.
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-[repeat(10,minmax(0,1fr))] gap-1">
           {bagItems.map(({ def, qty }) => (
-            <div key={def.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-2.5">
-              <span className="flex-shrink-0 text-2xl">{def.icon}</span>
-              <div className="min-w-0 flex-1">
-                <div className="font-['Baloo_2'] text-[12px] font-bold text-[#fff8f0]">{def.name} <span className="text-white/40">×{qty}</span></div>
-                <div className="text-[10px] leading-snug text-white/50">{def.desc}</div>
-              </div>
-              <div className="flex-shrink-0 text-right text-[9px] font-bold uppercase tracking-wide text-white/30">
-                {def.category === 'equipment' && (def.slot ? `Tap ${GEAR_SLOTS.find((s) => s.key === def.slot)?.name}` : '')}
-                {def.category === 'card' && 'Socket via Head/Robe/Cape'}
-                {def.category === 'soul' && 'Socket via Staff'}
-                {def.category === 'consumable' && 'Use in battle'}
-                {def.category === 'loot' && 'Quest Item'}
-              </div>
+            <div
+              key={def.id}
+              draggable={def.category === 'equipment'}
+              onDragStart={(e) => e.dataTransfer.setData(DRAG_MIME, def.id)}
+              onDoubleClick={() => { if (def.category === 'card' || def.category === 'soul') onOpenSocket(def.id); }}
+              onContextMenu={(e) => { e.preventDefault(); onOpenDetail(def.id); }}
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-md border border-white/12 bg-black/20 text-base ${def.category === 'equipment' ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            >
+              {def.icon}
+              {qty > 1 && (
+                <span className="absolute bottom-0 right-0.5 font-['Baloo_2'] text-[7px] font-extrabold text-white/70">×{qty}</span>
+              )}
             </div>
           ))}
         </div>
       )}
+      <div className="mt-2 text-center text-[9px] leading-snug text-white/30">
+        Drag Equipment onto a slot to wear it · Double-tap a Card/Soul Crystal to socket it · Right-click any item for details
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Joystick } from './Joystick';
 import { Minimap } from './Minimap';
 import { MinimapBadge } from './MinimapBadge';
 import { WorldMapModal } from './WorldMapModal';
+import { MapItemsSheet } from './MapItemsSheet';
 
 const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 1;
@@ -46,6 +47,7 @@ export function MapPage() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewSize, setViewSize] = useState({ w: 370, h: 780 });
   const [worldMapOpen, setWorldMapOpen] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
 
   // Gameplay camera always centers on the player, never on the cursor/pinch
@@ -219,12 +221,20 @@ export function MapPage() {
           <Minimap map={map} playerPos={playerPos} onClick={() => setWorldMapOpen(true)} />
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <button
-            onClick={() => navigate('/hub')}
-            className="rounded-2xl border border-white/15 bg-[#241a30]/80 px-3 py-1.5 font-['Baloo_2'] text-[11px] font-bold text-white backdrop-blur-md"
-          >
-            🏠 Hub
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setItemsOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[#241a30]/80 text-base backdrop-blur-md"
+            >
+              🎒
+            </button>
+            <button
+              onClick={() => navigate('/hub')}
+              className="rounded-2xl border border-white/15 bg-[#241a30]/80 px-3 py-1.5 font-['Baloo_2'] text-[11px] font-bold text-white backdrop-blur-md"
+            >
+              🏠 Hub
+            </button>
+          </div>
           <MinimapBadge mapId={mapId} visitedMaps={visitedMaps} onClick={() => setWorldMapOpen(true)} />
         </div>
       </div>
@@ -244,6 +254,7 @@ export function MapPage() {
       </div>
 
       {worldMapOpen && <WorldMapModal currentMapId={mapId} visitedMaps={visitedMaps} onClose={() => setWorldMapOpen(false)} />}
+      <MapItemsSheet open={itemsOpen} map={map} onClose={() => setItemsOpen(false)} />
     </div>
   );
 }

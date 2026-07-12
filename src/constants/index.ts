@@ -11,3 +11,4 @@ export * from './maps';
 export * from './mapArtPositions';
 export * from './help';
 export * from './items';
+export * from './monsterLoot';

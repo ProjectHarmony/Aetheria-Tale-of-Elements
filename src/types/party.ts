@@ -13,8 +13,12 @@ export interface MageState {
   ranks: Record<string, number>;
   /** null = auto-equip (first N unlocked actives); array = manual pick */
   equipped: string[] | null;
-  /** Worn gear (Headgear/Robe/Cape/Weapon/Accessory x2) — null = empty slot. */
+  /** Worn gear (Headgear/Robe/Cape/Weapon/Necklace/Accessory) — null = empty slot. */
   gear: Record<GearSlot, EquippedGear | null>;
+  /** HP carried between Adventure battles (Pokemon-style — no auto-heal
+   *  between fights). `undefined` = never fought yet, treated as full HP.
+   *  A full party wipe resets everyone to 1 (see gameStore.syncPartyHp). */
+  currentHp?: number;
 }
 
 export interface Party {

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Element } from '@/types';
+import { ITEMS_BY_ID } from '@/constants';
 import { useBattleStore } from '@/stores/battleStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useMapStore } from '@/stores/mapStore';
@@ -15,24 +17,33 @@ export function BattlePage() {
   const battleContext = useGameStore((s) => s.battleContext);
   const party = useGameStore((s) => s.party);
   const grantXp = useGameStore((s) => s.grantXp);
+  const addAeons = useGameStore((s) => s.addAeons);
+  const addItem = useGameStore((s) => s.addItem);
+  const syncPartyHp = useGameStore((s) => s.syncPartyHp);
   const activeEncounter = useMapStore((s) => s.activeEncounter);
   const resolveEncounter = useMapStore((s) => s.resolveEncounter);
   const navigate = useNavigate();
   const xpGrantedRef = useRef(false);
   const xpRewardRef = useRef(60);
+  const aeonsRewardRef = useRef(8);
+  const lootDropsRef = useRef<Record<string, number>>({});
   const encounterResolvedRef = useRef(false);
+  const hpSyncedRef = useRef(false);
   const [xpSummary, setXpSummary] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     xpGrantedRef.current = false;
     encounterResolvedRef.current = false;
+    hpSyncedRef.current = false;
     setXpSummary(undefined);
     if (battleContext && party) {
       const { heroes: players, runtimeCards } = buildPlayerTeamFromParty(party);
       const level = avgPartyLevel(party);
       if (battleContext === 'adventure' && activeEncounter) {
-        const { enemies, xpReward, dmgScale } = buildEncounterEnemyTeam(activeEncounter.names, level);
+        const { enemies, xpReward, aeonsReward, lootDrops, dmgScale } = buildEncounterEnemyTeam(activeEncounter.names, level);
         xpRewardRef.current = xpReward;
+        aeonsRewardRef.current = aeonsReward;
+        lootDropsRef.current = lootDrops;
         startBattle(players, enemies, runtimeCards, dmgScale);
       } else {
         const enemies = buildRandomEnemyTeam(level);
@@ -51,10 +62,41 @@ export function BattlePage() {
     if (!won || battleContext !== 'adventure' || xpGrantedRef.current) return;
     xpGrantedRef.current = true;
     const xpAmount = xpRewardRef.current;
+    const aeonsAmount = aeonsRewardRef.current;
     const ups = grantXp(xpAmount);
-    setXpSummary(`+${xpAmount} XP to each mage.` + (ups.length ? ` 🎉 Level up: ${ups.map((u) => `${u.el} → Lv ${u.level}`).join(', ')}` : ''));
+    addAeons(aeonsAmount);
+    const lootEntries = Object.entries(lootDropsRef.current);
+    lootEntries.forEach(([itemId, qty]) => addItem(itemId, qty));
+    const lootText = lootEntries.length
+      ? ` · 🎁 ${lootEntries.map(([itemId, qty]) => `${ITEMS_BY_ID[itemId]?.name ?? itemId}${qty > 1 ? ` x${qty}` : ''}`).join(', ')}`
+      : '';
+    setXpSummary(
+      `+${xpAmount} XP to each mage · +💰${aeonsAmount} Aeons${lootText}.` +
+        (ups.length ? ` 🎉 Level up: ${ups.map((u) => `${u.el} → Lv ${u.level}`).join(', ')}` : ''),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [won, battleContext]);
+
+  // Pokemon-style HP: persists whatever each mage ended the fight with
+  // (including 0, if they got knocked out but the party still won) instead
+  // of auto-healing back to full for the next encounter. A full party wipe
+  // is the one exception — everyone wakes up at the hub with a mercy 1 HP
+  // rather than staying at 0 (see mapStore.resolveEncounter for the actual
+  // hub-return/position reset this pairs with).
+  useEffect(() => {
+    if (!ended || battleContext !== 'adventure' || !battle || hpSyncedRef.current) return;
+    hpSyncedRef.current = true;
+    if (won) {
+      const hpByEl: Partial<Record<Element, number>> = {};
+      battle.players.forEach((h) => { hpByEl[h.el] = h.hp; });
+      syncPartyHp(hpByEl);
+    } else if (party) {
+      const hpByEl: Partial<Record<Element, number>> = {};
+      party.picks.forEach((el) => { hpByEl[el] = 1; });
+      syncPartyHp(hpByEl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ended, battleContext]);
 
   // Feeds the outcome back to the map: a win starts the defeated roamer's
   // respawn cooldown (or marks the MVP world-singleton dead); a loss leaves

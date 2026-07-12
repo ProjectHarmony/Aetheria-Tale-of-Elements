@@ -39,9 +39,10 @@ export const HUB_MAP_ID = 'crown_haven_city';
 
 /** Source positions/sizes are a 0–100 abstract space, scaled up to real
  *  in-game units — every location is a uniform 100x100 in the source data,
- *  so this one constant is effectively each map's real footprint (x15 =
- *  1500x1500, i.e. a 150x150 map at the original x10 scale). */
-const SCALE = 15;
+ *  so this one constant is effectively each map's real footprint (x20 =
+ *  2000x2000, i.e. a 200x200 map at the original x10 scale — enough open
+ *  room for the camera pan to not feel suffocating). */
+const SCALE = 20;
 
 const DIR_WORD_TO_LETTER: Record<RawWarpPortal['direction'], Direction> = {
   North: 'N', South: 'S', East: 'E', West: 'W',

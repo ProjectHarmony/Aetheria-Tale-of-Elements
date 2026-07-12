@@ -7,6 +7,7 @@ import {
   STAT_POINTS_PER_LEVEL,
   xpNeededForLevel,
 } from '@/constants';
+import { derivedStatsFor } from '@/systems/battle';
 
 export interface LevelUp {
   el: Element;
@@ -20,14 +21,20 @@ export function grantPartyXp(party: Party, amount: number): LevelUp[] {
     const m = party.mages[el];
     if (!m || m.level >= MAX_MAGE_LEVEL) return;
     m.xp += amount;
+    let leveled = false;
     while (m.level < MAX_MAGE_LEVEL && m.xp >= xpNeededForLevel(m.level)) {
       m.xp -= xpNeededForLevel(m.level);
       m.level += 1;
       m.statPoints += STAT_POINTS_PER_LEVEL;
       m.skillPoints += SKILL_POINTS_PER_LEVEL;
       ups.push({ el, level: m.level });
+      leveled = true;
     }
     if (m.level >= MAX_MAGE_LEVEL) m.xp = 0;
+    // Leveling up tops off HP — a level gained mid-adventure shouldn't leave
+    // a mage stuck at whatever fraction of the OLD max they were carrying
+    // (Pokemon-style HP otherwise persists untouched between fights).
+    if (leveled) m.currentHp = derivedStatsFor(el, m).maxHp;
   });
   return ups;
 }

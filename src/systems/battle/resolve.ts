@@ -285,7 +285,14 @@ function* endRound(state: BattleState): Generator<BattleEvent, void, unknown> {
   const playersAlive = aliveHeroes(state.players).length;
   if (enemiesAlive === 0 || playersAlive === 0) {
     state.phase = 'ended';
-    state.winner = playersAlive === 0 ? 'enemies' : 'players';
+    // A mutual wipe (both sides hit 0 the same round) counts as a player
+    // win, not a loss — you took out the last enemy, full stop. This edge
+    // case got much more common once HP started carrying over between
+    // fights (Pokemon-style): entering a fight already wounded means a
+    // last-enemy kill and your own last mage's death can land in the same
+    // round, and defaulting that to "enemies win" felt like the game
+    // stealing a victory the player clearly earned.
+    state.winner = enemiesAlive === 0 ? 'players' : 'enemies';
     yield { type: 'battleEnd', winner: state.winner };
     return;
   }

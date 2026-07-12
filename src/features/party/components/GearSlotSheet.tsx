@@ -8,7 +8,7 @@ const SLOT_META: Record<GearSlot, { name: string; icon: string }> = {
   robe: { name: 'Robe', icon: '👘' },
   cape: { name: 'Cape', icon: '🧣' },
   weapon: { name: 'Staff (Weapon)', icon: '🪄' },
-  acc1: { name: 'Accessory', icon: '💍' },
+  acc1: { name: 'Necklace', icon: '📿' },
   acc2: { name: 'Accessory', icon: '💍' },
 };
 
@@ -20,12 +20,14 @@ interface GearSlotSheetProps {
 }
 
 /** Rendered at PartyMageDetail's root (same pattern as SkillTreeSheet) so
- *  `absolute inset-0` resolves against the viewport-sized ancestor. */
+ *  `absolute inset-0` resolves against the viewport-sized ancestor.
+ *  Only handles Equip/Unequip and viewing what's socketed — inserting a new
+ *  Card/Soul Crystal happens from the Backpack grid (double-click the item
+ *  itself), not from here, so socketing never depends on this sheet being open. */
 export function GearSlotSheet({ slot, el, mage, onClose }: GearSlotSheetProps) {
   const inventory = useGameStore((s) => s.inventory);
   const equipItem = useGameStore((s) => s.equipItem);
   const unequipItem = useGameStore((s) => s.unequipItem);
-  const socketItem = useGameStore((s) => s.socketItem);
   const unsocketItem = useGameStore((s) => s.unsocketItem);
 
   if (!slot) return null;
@@ -38,12 +40,6 @@ export function GearSlotSheet({ slot, el, mage, onClose }: GearSlotSheetProps) {
   const equipOptions = Object.entries(inventory)
     .map(([id, qty]) => ({ def: ITEMS_BY_ID[id], qty }))
     .filter((e): e is { def: NonNullable<typeof e.def>; qty: number } => !!e.def && e.def.category === 'equipment' && e.def.slot === slot && e.qty > 0);
-
-  const socketOptions = socketCategory
-    ? Object.entries(inventory)
-        .map(([id, qty]) => ({ def: ITEMS_BY_ID[id], qty }))
-        .filter((e): e is { def: NonNullable<typeof e.def>; qty: number } => !!e.def && e.def.category === socketCategory && e.qty > 0)
-    : [];
 
   return (
     <AnimatePresence>
@@ -86,7 +82,7 @@ export function GearSlotSheet({ slot, el, mage, onClose }: GearSlotSheetProps) {
                 {capacity > 0 && (
                   <div className="mb-3">
                     <div className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-white/45">
-                      Sockets ({worn!.socketedIds.length}/{capacity}) — {socketCategory === 'card' ? 'Monster Cards' : 'Soul Stones'}
+                      Sockets ({worn!.socketedIds.length}/{capacity}) — {socketCategory === 'card' ? 'Monster Cards' : 'Soul Crystals'}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       {worn!.socketedIds.map((id) => {
@@ -106,28 +102,7 @@ export function GearSlotSheet({ slot, el, mage, onClose }: GearSlotSheetProps) {
                         </div>
                       ))}
                     </div>
-
-                    {worn!.socketedIds.length < capacity && (
-                      socketOptions.length === 0 ? (
-                        <div className="mt-2 text-center text-[10px] text-white/35">No compatible {socketCategory === 'card' ? 'Cards' : 'Soul Stones'} in your Backpack.</div>
-                      ) : (
-                        <div className="mt-2 flex flex-col gap-1.5">
-                          {socketOptions.map(({ def, qty }) => (
-                            <button
-                              key={def.id}
-                              onClick={() => socketItem(el, slot, def.id)}
-                              className="flex items-center gap-2.5 rounded-lg border border-white/12 bg-white/5 p-2 text-left"
-                            >
-                              <span className="text-lg">{def.icon}</span>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[11px] font-bold text-[#fff8f0]">{def.name} <span className="text-white/40">×{qty}</span></div>
-                              </div>
-                              <span className="flex-shrink-0 font-['Baloo_2'] text-[10px] font-extrabold text-[var(--color-gold)]">Socket</span>
-                            </button>
-                          ))}
-                        </div>
-                      )
-                    )}
+                    <div className="mt-2 text-center text-[9.5px] text-white/35">Double-tap a Card or Soul Crystal in the Backpack to insert it here.</div>
                   </div>
                 )}
               </>

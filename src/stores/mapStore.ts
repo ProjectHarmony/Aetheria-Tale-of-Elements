@@ -50,6 +50,9 @@ interface MapStore {
   clearEncounter: () => void;
   triggerEncounter: (roamerId: string) => void;
   resolveEncounter: (won: boolean) => void;
+  /** Instantly warps the player to Crown Haven City — used by a Town Portal
+   *  Scroll (see MapItemsSheet) and shared with resolveEncounter's loss path. */
+  warpToHub: () => void;
 }
 
 // Session-only (never persisted, matching the original's plain in-memory
@@ -193,22 +196,8 @@ export const useMapStore = create<MapStore>()(
         }
 
         if (activeEncounter && !won) {
-          const hub = MAPS[HUB_MAP_ID];
-          set({
-            activeEncounter: null,
-            pendingEncounter: false,
-            locked: false,
-            mapId: HUB_MAP_ID,
-            playerPos: hub ? { x: hub.w / 2, y: hub.h / 2 } : { x: 750, y: 750 },
-            roamers: hub ? resolveRoamers(hub, respawnAt, bossDefeatedAt) : [],
-            // Whatever direction was held the instant the encounter
-            // triggered (e.g. walking into the roamer) otherwise sits in
-            // the store, untouched, for the whole fight — tick() just
-            // skips consuming it while locked/pendingEncounter, not clears
-            // it — so the player would start sliding in that stale
-            // direction the moment they're back, with no input at all.
-            joyVec: { x: 0, y: 0 },
-          });
+          get().warpToHub();
+          set({ activeEncounter: null, pendingEncounter: false });
           return;
         }
 
@@ -218,6 +207,23 @@ export const useMapStore = create<MapStore>()(
           pendingEncounter: false,
           locked: false,
           roamers: map ? resolveRoamers(map, respawnAt, bossDefeatedAt) : [],
+          joyVec: { x: 0, y: 0 },
+        });
+      },
+
+      warpToHub: () => {
+        const hub = MAPS[HUB_MAP_ID];
+        set({
+          locked: false,
+          mapId: HUB_MAP_ID,
+          playerPos: hub ? { x: hub.w / 2, y: hub.h / 2 } : { x: 750, y: 750 },
+          roamers: hub ? resolveRoamers(hub, respawnAt, bossDefeatedAt) : [],
+          // Whatever direction was held the instant this fired (e.g.
+          // walking into a roamer, or opening the Backpack mid-stride)
+          // otherwise sits in the store untouched — tick() just skips
+          // consuming it while locked/pendingEncounter, not clears it — so
+          // the player would start sliding in that stale direction the
+          // moment they arrive, with no input at all.
           joyVec: { x: 0, y: 0 },
         });
       },

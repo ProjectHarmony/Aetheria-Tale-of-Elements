@@ -1,5 +1,6 @@
 import type { Card, Element, EquippedGear, GearSlot, Hero, HeroPassives, ItemStatBonus, MageState, Party, PassiveKnobKey, Skill } from '@/types';
 import {
+  AEON_TIER_REWARD,
   DEFAULT_STATS,
   ELEMENTS_ALL,
   HERO_ACC,
@@ -24,6 +25,7 @@ import {
   STARTING_ENERGY,
   STAT_POINTS_PER_LEVEL,
   STAT_SCALE,
+  rollMonsterLoot,
   skillToCard,
   statsFor,
   ultimateUnlocked,
@@ -159,15 +161,21 @@ export function buildPlayerTeamFromParty(party: Party): { heroes: Hero[]; runtim
     const hasUltimate = ultimateUnlocked(mage, el);
     if (hasUltimate) runtimeCards[ult.id] = skillToCard(ult, skillRank(mage, ult.id) || 1, el);
 
+    // Pokemon-style HP: carries over from the last Adventure battle instead
+    // of auto-healing to full — clamped in case maxHp shrank (gear removed,
+    // etc.) since battle start. A mage with no prior battle (or a fresh
+    // save) starts at full, same as before this carried between fights.
+    const hp = Math.max(0, Math.min(d.maxHp, mage.currentHp ?? d.maxHp));
+
     const hero: Hero = {
       id: 'p' + i,
       name: HERO_NAMES[el],
       el,
       row: party.placements[el] ?? (i === 0 ? 'front' : 'back'),
       level: mage.level,
-      hp: d.maxHp,
+      hp,
       maxHp: d.maxHp,
-      alive: true,
+      alive: hp > 0,
       block: 0,
       speed: d.speed,
       powMult: d.powMult,
@@ -298,9 +306,12 @@ export function xpGapMultiplier(monsterLevel: number, partyLevel: number): numbe
  * encode difficulty. `partyLevel` only feeds the XP-reward's level-gap
  * bonus (see `xpGapMultiplier`) — it never touches enemy stats.
  */
-export function buildEncounterEnemyTeam(monsterNames: string[], partyLevel = 1): { enemies: Hero[]; xpReward: number; dmgScale: number } {
+export function buildEncounterEnemyTeam(
+  monsterNames: string[],
+  partyLevel = 1,
+): { enemies: Hero[]; xpReward: number; aeonsReward: number; lootDrops: Record<string, number>; dmgScale: number } {
   const known = monsterNames.map((n) => MONSTER_ROSTER_BY_NAME[n]).filter((m): m is NonNullable<typeof m> => !!m);
-  if (known.length === 0) return { enemies: buildRandomEnemyTeam(1), xpReward: 60, dmgScale: 1 };
+  if (known.length === 0) return { enemies: buildRandomEnemyTeam(1), xpReward: 60, aeonsReward: 8, lootDrops: {}, dmgScale: 1 };
 
   const threeUp = known.length === 3;
   const enemies: Hero[] = known.map((entry, i) => {
@@ -329,5 +340,7 @@ export function buildEncounterEnemyTeam(monsterNames: string[], partyLevel = 1):
   });
 
   const xpReward = known.reduce((sum, m) => sum + Math.round((TIER_XP[m.tier] ?? 60) * xpGapMultiplier(m.level, partyLevel)), 0);
-  return { enemies, xpReward, dmgScale: 1 };
+  const aeonsReward = known.reduce((sum, m) => sum + (AEON_TIER_REWARD[m.tier] ?? 8), 0);
+  const lootDrops = rollMonsterLoot(known.map((m) => m.name));
+  return { enemies, xpReward, aeonsReward, lootDrops, dmgScale: 1 };
 }

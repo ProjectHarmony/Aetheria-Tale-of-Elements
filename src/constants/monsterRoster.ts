@@ -10,7 +10,7 @@ import { computeMonsterStats } from './monsterFormulas';
  */
 const R = (name: string, role: MonsterRosterEntry['role'], element: MonsterRosterEntry['element'], level: number, tier: MonsterRosterEntry['tier'], subtype: MonsterRosterEntry['subtype'], aggressive: boolean): MonsterRosterEntry => ({ name, role, element, level, tier, subtype, aggressive });
 
-const MONSTER_ROSTER_RAW: MonsterRosterEntry[] = [
+export const MONSTER_ROSTER_RAW: MonsterRosterEntry[] = [
   // ---- Regular (45) ----
   R('Skarn', 'Tank', 'fire', 1, 'regular', 'Field', true),
   R('Volthak', 'Tactician', 'water', 2, 'regular', 'Field', true),

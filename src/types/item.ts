@@ -32,8 +32,17 @@ export interface ItemDef {
   statBonus?: ItemStatBonus;
   /** Equipment only — how many Cards (Head/Robe/Cape) or Soul Stones (Weapon) this piece accepts. Accessories: 0/undefined. */
   socketCount?: number;
-  /** Consumable only — HP restored when used on a hero mid-battle. */
+  /** Consumable only — HP restored when used on a hero (in battle, or on the
+   *  overworld where it heals the party's lowest-HP% mage directly). */
   healAmount?: number;
+  /** Consumable only — teleports the player straight back to Crown Haven
+   *  City when used from the overworld (a "Town Portal Scroll"). Not usable
+   *  mid-battle — retreating out of a fight isn't implemented. */
+  teleportHub?: boolean;
+  /** Aeons price at Crown Haven City's shop — undefined = not purchasable. */
+  buyPrice?: number;
+  /** Aeons the shop pays to buy this off the player — undefined = not sellable. */
+  sellPrice?: number;
 }
 
 /** One worn piece of gear plus whatever's currently socketed into it —

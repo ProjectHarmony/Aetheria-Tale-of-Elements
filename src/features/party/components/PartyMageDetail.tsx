@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Element, GearSlot } from '@/types';
 import type { StatKey } from '@/constants';
-import { ELEMENT_META, HERO_NAMES, MAX_EQUIPPED_ACTIVES, MAX_MAGE_LEVEL, SKILLS_BY_ID, SKILL_TREES, STAT_META, xpNeededForLevel } from '@/constants';
+import { ELEMENT_META, HERO_NAMES, ITEMS_BY_ID, MAX_EQUIPPED_ACTIVES, MAX_MAGE_LEVEL, SKILLS_BY_ID, SKILL_TREES, STAT_META, xpNeededForLevel } from '@/constants';
 import { derivedStatsFor, equippedActives, unlockedActives } from '@/systems/battle';
 import { createEmptyDraft, draftHasPending, stageSkillRank, stageStatPoint, unstageSkillRank, unstageStatPoint } from '@/systems/party';
 import { useGameStore } from '@/stores/gameStore';
@@ -13,11 +13,14 @@ import { SkillsTab } from './SkillsTab';
 import { SkillTreeSheet } from './SkillTreeSheet';
 import { EquipmentTab } from './EquipmentTab';
 import { GearSlotSheet } from './GearSlotSheet';
+import { CardSocketSheet } from './CardSocketSheet';
+import { ItemDetailModal } from './ItemDetailModal';
 
 type SubTab = 'stats' | 'skills' | 'equipment';
 
 export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => void }) {
   const party = useGameStore((s) => s.party);
+  const inventory = useGameStore((s) => s.inventory);
   const applyMageDraft = useGameStore((s) => s.applyMageDraft);
   const setEquipped = useGameStore((s) => s.setEquipped);
   const respec = useGameStore((s) => s.respec);
@@ -29,10 +32,13 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
   const [respecConfirmOpen, setRespecConfirmOpen] = useState(false);
   const [openSkillId, setOpenSkillId] = useState<string | null>(null);
   const [openGearSlot, setOpenGearSlot] = useState<GearSlot | null>(null);
+  const [socketItemId, setSocketItemId] = useState<string | null>(null);
+  const [detailItemId, setDetailItemId] = useState<string | null>(null);
 
   useEffect(() => setDraft(createEmptyDraft()), [el]);
   useEffect(() => setOpenSkillId(null), [el]);
   useEffect(() => setOpenGearSlot(null), [el]);
+  useEffect(() => { setSocketItemId(null); setDetailItemId(null); }, [el]);
 
   const mage = party?.mages[el];
   if (!mage) return null;
@@ -119,7 +125,9 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
           onOpenSkill={setOpenSkillId}
         />
       )}
-      {subTab === 'equipment' && <EquipmentTab mage={mage} onOpenSlot={setOpenGearSlot} />}
+      {subTab === 'equipment' && (
+        <EquipmentTab el={el} mage={mage} onOpenSlot={setOpenGearSlot} onOpenSocket={setSocketItemId} onOpenDetail={setDetailItemId} />
+      )}
 
       {pending && (subTab === 'stats' || subTab === 'skills') && (
         <div className="mt-3 flex items-center justify-between gap-2.5 rounded-2xl border-[1.5px] border-[rgba(126,232,184,0.45)] bg-[#12291f]/90 p-2.5">
@@ -208,6 +216,8 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
         }}
       />
       <GearSlotSheet slot={openGearSlot} el={el} mage={mage} onClose={() => setOpenGearSlot(null)} />
+      <CardSocketSheet item={socketItemId ? ITEMS_BY_ID[socketItemId] ?? null : null} el={el} mage={mage} onClose={() => setSocketItemId(null)} />
+      <ItemDetailModal item={detailItemId ? ITEMS_BY_ID[detailItemId] ?? null : null} qty={detailItemId ? inventory[detailItemId] ?? 0 : 0} onClose={() => setDetailItemId(null)} />
     </div>
   );
 }

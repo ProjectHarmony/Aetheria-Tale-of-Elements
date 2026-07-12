@@ -40,7 +40,8 @@ interface BattleStore {
   pass: () => void;
   attack: () => void;
   undo: (heroId: string) => void;
-  /** Free action (doesn't spend energy/a turn) — heals the party's lowest-HP living mage from the Backpack. */
+  /** Spends the current planning hero's turn (same as Pass) to heal the
+   *  party's lowest-HP living mage from the Backpack — choose wisely. */
   useConsumable: (itemId: string) => boolean;
 }
 
@@ -203,9 +204,12 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       await runResolution(battle);
     },
 
+    // Costs the currently-planning hero's turn, same as Pass — using an item
+    // mid-battle isn't free, so the player has to weigh a heal against
+    // actually attacking that round.
     useConsumable: (itemId) => {
       const battle = get().battle;
-      if (!battle || battle.phase !== 'planning') return false;
+      if (!battle || battle.phase !== 'planning' || !battle.planningHeroId || battle.pendingCardId) return false;
       const def = ITEMS_BY_ID[itemId];
       if (!def || def.category !== 'consumable' || !def.healAmount) return false;
 
@@ -217,11 +221,13 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       const target = [...alive].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]!;
       if (target.hp >= target.maxHp) return false;
 
+      const actingHeroId = battle.planningHeroId;
       const before = target.hp;
       target.hp = Math.min(target.maxHp, target.hp + def.healAmount);
       const healed = target.hp - before;
 
       gameStore.removeItem(itemId, 1);
+      assignPass(battle, actingHeroId);
       publish(battle, { type: 'heal', targetId: target.id, amount: healed });
       return true;
     },
