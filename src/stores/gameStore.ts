@@ -54,6 +54,27 @@ interface GameStore {
   healFromMap: (itemId: string) => boolean;
 }
 
+const DEFAULT_GEAR: Record<GearSlot, EquippedGear | null> = { head: null, robe: null, cape: null, weapon: null, acc1: null, acc2: null };
+
+/** Backfills `gear` (added after some accounts already had a saved Party)
+ *  on every mage that's missing it — every gear-reading component/action
+ *  indexes straight into `mage.gear[slot]` with no optional chaining, so an
+ *  old save without this field crashed the whole Party > Gear tab (blank
+ *  screen, no error surfaced) the moment it tried to render. */
+function normalizeParty(party: Party | null | undefined): Party | null {
+  if (!party) return null;
+  const mages = { ...party.mages };
+  let changed = false;
+  (Object.keys(mages) as Element[]).forEach((el) => {
+    const m = mages[el];
+    if (m && !m.gear) {
+      mages[el] = { ...m, gear: { ...DEFAULT_GEAR } };
+      changed = true;
+    }
+  });
+  return changed ? { ...party, mages } : party;
+}
+
 /**
  * Local-only "memory" — persisted to localStorage via Zustand's own
  * middleware so refreshing the browser (or closing/reopening the PWA)
@@ -216,7 +237,7 @@ export const useGameStore = create<GameStore>()(
       unequipItem: (el, slot) => {
         const { party, inventory } = get();
         const mage = party?.mages[el];
-        const worn = mage?.gear[slot];
+        const worn = mage?.gear?.[slot];
         if (!party || !mage || !worn) return;
         const nextInventory = { ...inventory };
         nextInventory[worn.itemId] = (nextInventory[worn.itemId] ?? 0) + 1;
@@ -231,7 +252,7 @@ export const useGameStore = create<GameStore>()(
         const { party, inventory } = get();
         const mage = party?.mages[el];
         const def = ITEMS_BY_ID[itemId];
-        const worn = mage?.gear[slot];
+        const worn = mage?.gear?.[slot];
         if (!party || !mage || !worn || !def) return false;
         const capacity = ITEMS_BY_ID[worn.itemId]?.socketCount ?? 0;
         if (worn.socketedIds.length >= capacity) return false;
@@ -254,7 +275,7 @@ export const useGameStore = create<GameStore>()(
       unsocketItem: (el, slot, socketedItemId) => {
         const { party, inventory } = get();
         const mage = party?.mages[el];
-        const worn = mage?.gear[slot];
+        const worn = mage?.gear?.[slot];
         if (!party || !mage || !worn) return;
         const idx = worn.socketedIds.indexOf(socketedItemId);
         if (idx < 0) return;
@@ -325,6 +346,10 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'two-elements-save',
       partialize: (state) => ({ accounts: state.accounts, user: state.user, party: state.party, inventory: state.inventory, aeons: state.aeons }),
+      merge: (persistedState, currentState) => {
+        const merged = { ...currentState, ...(persistedState as Partial<GameStore>) };
+        return { ...merged, party: normalizeParty(merged.party) };
+      },
     },
   ),
 );
