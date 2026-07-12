@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import type { Element } from '@/types';
+import type { Element, GearSlot } from '@/types';
 import type { StatKey } from '@/constants';
 import { ELEMENT_META, HERO_NAMES, MAX_EQUIPPED_ACTIVES, MAX_MAGE_LEVEL, SKILLS_BY_ID, SKILL_TREES, STAT_META, xpNeededForLevel } from '@/constants';
 import { derivedStatsFor, equippedActives, unlockedActives } from '@/systems/battle';
@@ -12,6 +12,7 @@ import { StatsTab } from './StatsTab';
 import { SkillsTab } from './SkillsTab';
 import { SkillTreeSheet } from './SkillTreeSheet';
 import { EquipmentTab } from './EquipmentTab';
+import { GearSlotSheet } from './GearSlotSheet';
 
 type SubTab = 'stats' | 'skills' | 'equipment';
 
@@ -27,9 +28,11 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [respecConfirmOpen, setRespecConfirmOpen] = useState(false);
   const [openSkillId, setOpenSkillId] = useState<string | null>(null);
+  const [openGearSlot, setOpenGearSlot] = useState<GearSlot | null>(null);
 
   useEffect(() => setDraft(createEmptyDraft()), [el]);
   useEffect(() => setOpenSkillId(null), [el]);
+  useEffect(() => setOpenGearSlot(null), [el]);
 
   const mage = party?.mages[el];
   if (!mage) return null;
@@ -116,7 +119,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
           onOpenSkill={setOpenSkillId}
         />
       )}
-      {subTab === 'equipment' && <EquipmentTab />}
+      {subTab === 'equipment' && <EquipmentTab mage={mage} onOpenSlot={setOpenGearSlot} />}
 
       {pending && (subTab === 'stats' || subTab === 'skills') && (
         <div className="mt-3 flex items-center justify-between gap-2.5 rounded-2xl border-[1.5px] border-[rgba(126,232,184,0.45)] bg-[#12291f]/90 p-2.5">
@@ -204,6 +207,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
           }
         }}
       />
+      <GearSlotSheet slot={openGearSlot} el={el} mage={mage} onClose={() => setOpenGearSlot(null)} />
     </div>
   );
 }

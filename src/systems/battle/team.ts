@@ -1,4 +1,4 @@
-import type { Card, Element, Hero, HeroPassives, MageState, Party, PassiveKnobKey, Skill } from '@/types';
+import type { Card, Element, EquippedGear, GearSlot, Hero, HeroPassives, ItemStatBonus, MageState, Party, PassiveKnobKey, Skill } from '@/types';
 import {
   DEFAULT_STATS,
   ELEMENTS_ALL,
@@ -8,6 +8,7 @@ import {
   HERO_HP,
   HERO_NAMES,
   ENEMY_NAMES,
+  ITEMS_BY_ID,
   LEVEL_GAP_XP_BONUS_MAX_MULT,
   LEVEL_GAP_XP_BONUS_PER_LEVEL,
   MAX_ENERGY,
@@ -48,6 +49,7 @@ export function newMageState(el: Element): MageState {
     stats: { ...DEFAULT_STATS },
     ranks: basicSkill ? { [basicSkill.id]: 1 } : {},
     equipped: null,
+    gear: { head: null, robe: null, cape: null, weapon: null, acc1: null, acc2: null },
   };
 }
 
@@ -91,8 +93,31 @@ interface DerivedStats {
   passives: HeroPassives;
 }
 
+/** Sums the stat bonus from every worn piece of gear PLUS whatever Cards
+ *  (Head/Robe/Cape) or Soul Stones (Weapon) are socketed into it — same
+ *  units as allocated stat points, so it folds into the exact same
+ *  STAT_SCALE conversion below rather than needing its own math. */
+export function gearStatBonus(mage: MageState): Required<ItemStatBonus> {
+  const total: Required<ItemStatBonus> = { pow: 0, cs: 0, vit: 0, dge: 0, crt: 0, acc: 0 };
+  const add = (b?: ItemStatBonus) => {
+    if (!b) return;
+    total.pow += b.pow ?? 0; total.cs += b.cs ?? 0; total.vit += b.vit ?? 0;
+    total.dge += b.dge ?? 0; total.crt += b.crt ?? 0; total.acc += b.acc ?? 0;
+  };
+  // `?? {}` guards accounts saved before gear existed (this is localStorage-
+  // only, no migration pipeline) — they just resolve to zero bonus.
+  (Object.keys(mage.gear ?? {}) as GearSlot[]).forEach((slot) => {
+    const worn: EquippedGear | null = mage.gear[slot];
+    if (!worn) return;
+    add(ITEMS_BY_ID[worn.itemId]?.statBonus);
+    worn.socketedIds.forEach((id) => add(ITEMS_BY_ID[id]?.statBonus));
+  });
+  return total;
+}
+
 export function derivedStatsFor(el: Element, mage: MageState): DerivedStats {
   const s = mage.stats;
+  const gear = gearStatBonus(mage);
   const passiveSkills = SKILL_TREES[el].filter((k) => k.kind === 'passive' && (mage.ranks[k.id] || 0) > 0);
 
   const sum = (key: 'blockOnAttack' | 'execBonus' | 'reflect' | 'dmgReduction' | 'regen' | 'dodgeUp' | 'speedUp' | 'accUp' | 'maxHpUpPct' | PassiveKnobKey) =>
@@ -106,12 +131,12 @@ export function derivedStatsFor(el: Element, mage: MageState): DerivedStats {
   passives.lowHpThreshold = lowHpThreshold;
 
   return {
-    maxHp: Math.round((HERO_HP[el] + (s.vit - 5) * STAT_SCALE.vit) * (1 + sum('maxHpUpPct'))),
-    speed: SPEED[el] + (s.cs - 5) * STAT_SCALE.cs + sum('speedUp'),
-    powMult: 1 + (s.pow - 5) * STAT_SCALE.pow,
-    dodge: Math.min(0.6, HERO_DODGE[el] + (s.dge - 5) * STAT_SCALE.dge + sum('dodgeUp')),
-    crit: Math.min(0.6, HERO_CRIT[el] + (s.crt - 5) * STAT_SCALE.crt),
-    acc: Math.min(1, HERO_ACC[el] + (s.acc - 5) * STAT_SCALE.acc + sum('accUp')),
+    maxHp: Math.round((HERO_HP[el] + (s.vit - 5 + gear.vit) * STAT_SCALE.vit) * (1 + sum('maxHpUpPct'))),
+    speed: SPEED[el] + (s.cs - 5 + gear.cs) * STAT_SCALE.cs + sum('speedUp'),
+    powMult: 1 + (s.pow - 5 + gear.pow) * STAT_SCALE.pow,
+    dodge: Math.min(0.6, HERO_DODGE[el] + (s.dge - 5 + gear.dge) * STAT_SCALE.dge + sum('dodgeUp')),
+    crit: Math.min(0.6, HERO_CRIT[el] + (s.crt - 5 + gear.crt) * STAT_SCALE.crt),
+    acc: Math.min(1, HERO_ACC[el] + (s.acc - 5 + gear.acc) * STAT_SCALE.acc + sum('accUp')),
     blockOnAttack: sum('blockOnAttack'),
     execBonus: sum('execBonus'),
     reflect: sum('reflect'),

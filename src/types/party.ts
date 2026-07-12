@@ -1,6 +1,7 @@
 import type { Element, Row } from './element';
 import type { MageStats } from '@/constants/heroes';
 import type { FormationKey } from '@/constants/formations';
+import type { EquippedGear, GearSlot } from './item';
 
 /** Persistent per-mage progression — the roster/party feature owns this shape. */
 export interface MageState {
@@ -12,6 +13,8 @@ export interface MageState {
   ranks: Record<string, number>;
   /** null = auto-equip (first N unlocked actives); array = manual pick */
   equipped: string[] | null;
+  /** Worn gear (Headgear/Robe/Cape/Weapon/Accessory x2) — null = empty slot. */
+  gear: Record<GearSlot, EquippedGear | null>;
 }
 
 export interface Party {

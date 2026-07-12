@@ -12,6 +12,7 @@ import { HandSection } from './HandSection';
 import { CtaBar } from './CtaBar';
 import { ActionBanner } from './ActionBanner';
 import { EndOverlay } from './EndOverlay';
+import { ItemsSheet } from './ItemsSheet';
 
 interface BattleScreenProps {
   restartLabel?: string;
@@ -29,8 +30,10 @@ export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRe
   const pass = useBattleStore((s) => s.pass);
   const attack = useBattleStore((s) => s.attack);
   const undo = useBattleStore((s) => s.undo);
+  const useConsumable = useBattleStore((s) => s.useConsumable);
   const startDemoBattle = useBattleStore((s) => s.startDemoBattle);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
 
   if (!battle) return null;
 
@@ -39,7 +42,7 @@ export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRe
   return (
     <div className="battle-layout relative">
       <div className="bl-topbar">
-        <TopBar battle={battle} onOpenHelp={() => setHelpOpen(true)} />
+        <TopBar battle={battle} onOpenHelp={() => setHelpOpen(true)} onOpenItems={() => setItemsOpen(true)} />
       </div>
 
       <div className="bl-field">
@@ -66,6 +69,7 @@ export function BattleScreen({ restartLabel = '🔄 New Battle', xpSummary, onRe
       <ActionBanner battle={battle} events={events} />
       <EndOverlay battle={battle} restartLabel={restartLabel} xpSummary={xpSummary} onRestart={onRestart ?? startDemoBattle} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <ItemsSheet open={itemsOpen} battle={battle} onClose={() => setItemsOpen(false)} onUse={useConsumable} />
     </div>
   );
 }

@@ -10,3 +10,4 @@ export * from './monsterSkills';
 export * from './maps';
 export * from './mapArtPositions';
 export * from './help';
+export * from './items';

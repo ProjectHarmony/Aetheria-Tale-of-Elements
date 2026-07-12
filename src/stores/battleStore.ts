@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { BattleEvent, BattleState, Card, Hero } from '@/types';
-import { PLANNING_TIME_SECONDS } from '@/constants';
+import { ITEMS_BY_ID, PLANNING_TIME_SECONDS } from '@/constants';
 import {
   assignPass,
   buildPlayerTeamFromParty,
@@ -17,6 +17,7 @@ import {
   syncPlanningHero,
   undoLastCast,
 } from '@/systems/battle';
+import { useGameStore } from './gameStore';
 
 const MAX_BUFFERED_EVENTS = 40;
 
@@ -39,6 +40,8 @@ interface BattleStore {
   pass: () => void;
   attack: () => void;
   undo: (heroId: string) => void;
+  /** Free action (doesn't spend energy/a turn) — heals the party's lowest-HP living mage from the Backpack. */
+  useConsumable: (itemId: string) => boolean;
 }
 
 let eventSeq = 0;
@@ -198,6 +201,29 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       const alivePlayers = battle.players.filter((h) => h.alive);
       if (!alivePlayers.every((h) => battle.heroDone[h.id])) return;
       await runResolution(battle);
+    },
+
+    useConsumable: (itemId) => {
+      const battle = get().battle;
+      if (!battle || battle.phase !== 'planning') return false;
+      const def = ITEMS_BY_ID[itemId];
+      if (!def || def.category !== 'consumable' || !def.healAmount) return false;
+
+      const gameStore = useGameStore.getState();
+      if ((gameStore.inventory[itemId] ?? 0) <= 0) return false;
+
+      const alive = battle.players.filter((h) => h.alive);
+      if (alive.length === 0) return false;
+      const target = [...alive].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]!;
+      if (target.hp >= target.maxHp) return false;
+
+      const before = target.hp;
+      target.hp = Math.min(target.maxHp, target.hp + def.healAmount);
+      const healed = target.hp - before;
+
+      gameStore.removeItem(itemId, 1);
+      publish(battle, { type: 'heal', targetId: target.id, amount: healed });
+      return true;
     },
   };
 });

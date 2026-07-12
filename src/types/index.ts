@@ -6,3 +6,4 @@ export * from './party';
 export * from './game';
 export * from './map';
 export * from './monster';
+export * from './item';
