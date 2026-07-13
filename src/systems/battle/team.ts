@@ -197,6 +197,11 @@ export function buildPlayerTeamFromParty(party: Party): { heroes: Hero[]; runtim
       maxHp: d.maxHp,
       alive: hp > 0,
       block: 0,
+      // Per-mage energy — every hero (not just enemies) now carries their
+      // own pool, spent on their own casts and regenerated on their own
+      // each round. See ENERGY_PER_ROUND in resolve.ts's endRound.
+      energy: STARTING_ENERGY,
+      maxEnergy: MAX_ENERGY,
       speed: d.speed,
       powMult: d.powMult,
       dodge: d.dodge,

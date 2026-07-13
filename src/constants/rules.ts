@@ -9,7 +9,6 @@ export const ENERGY_PER_ROUND = 2;
 export const PLANNING_TIME_SECONDS = 30;
 export const STARTING_ENERGY = 3;
 export const MAX_ENERGY = 10;
-export const MAX_SOUL = 2;
 
 /** Pacing of the resolution animation sequence — mirrors the original
  *  setTimeout(500)/setTimeout(550) beats in script.js runQueue/finishQueueStep. */

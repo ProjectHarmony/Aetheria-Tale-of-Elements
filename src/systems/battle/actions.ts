@@ -1,29 +1,20 @@
 import type { BattleState } from '@/types';
-import { DECK_CONFIG } from '@/constants';
+import { DECK_CONFIG, MAX_ENERGY } from '@/constants';
 import { cardById, heroHasAnyValidPlay, playCardFromHand } from './deck';
 import { currentPlanningHero, heroById } from './planning';
 
-/** Touch-move commit: spends energy/soul for real and queues the action. */
+/** Touch-move commit: spends the ACTING hero's own energy for real and queues the action. */
 export function commitPlannedCast(state: BattleState, actorId: string, cardId: string, targetId: string): void {
   const actor = heroById(state, actorId);
   const card = cardById(state, cardId);
   if (!actor || !card) return;
 
-  let fromEnergy = 0;
-  let fromSoul = 0;
-  if (state.energy >= card.cost) {
-    fromEnergy = card.cost;
-    state.energy -= card.cost;
-  } else {
-    fromEnergy = state.energy;
-    fromSoul = card.cost - state.energy;
-    state.energy = 0;
-    state.soul = Math.max(0, state.soul - fromSoul);
-  }
+  const fromEnergy = card.cost;
+  actor.energy = Math.max(0, (actor.energy ?? 0) - card.cost);
 
   const existing = state.plans[actor.id];
   const plan = Array.isArray(existing) ? existing : [];
-  plan.push({ cardId: card.id, targetId, fromEnergy, fromSoul });
+  plan.push({ cardId: card.id, targetId, fromEnergy });
   state.plans[actor.id] = plan;
 
   if (!card.isUltimate) playCardFromHand(actor, card.id);
@@ -37,19 +28,18 @@ export function commitPlannedCast(state: BattleState, actorId: string, cardId: s
   }
 }
 
-/** Pops a hero's most recent committed cast, refunding its energy/soul cost
- *  and restoring the card to hand (undoes exactly what commitPlannedCast
- *  spent/discarded). Returns the popped card's id, or null if the hero had
- *  nothing queued — shared by the full-undo and reopen-for-editing paths so
- *  they can't drift apart on the refund math. */
+/** Pops a hero's most recent committed cast, refunding its energy cost to
+ *  THAT hero and restoring the card to hand (undoes exactly what
+ *  commitPlannedCast spent/discarded). Returns the popped card's id, or
+ *  null if the hero had nothing queued — shared by the full-undo and
+ *  reopen-for-editing paths so they can't drift apart on the refund math. */
 function popLastCast(state: BattleState, heroId: string): string | null {
   const h = heroById(state, heroId);
   const plan = state.plans[heroId];
   if (!h || !Array.isArray(plan) || plan.length === 0) return null;
 
   const last = plan.pop()!;
-  state.energy = Math.min(state.maxEnergy, state.energy + (last.fromEnergy || 0));
-  state.soul = Math.min(state.maxSoul, state.soul + (last.fromSoul || 0));
+  h.energy = Math.min(h.maxEnergy ?? MAX_ENERGY, (h.energy ?? 0) + (last.fromEnergy || 0));
 
   const card = cardById(state, last.cardId);
   if (card && !card.isUltimate) {

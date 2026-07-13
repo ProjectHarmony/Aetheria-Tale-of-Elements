@@ -20,7 +20,7 @@ export function HandZone({ battle, filter, onSelectCard }: HandZoneProps) {
     return <div className="w-full px-4 py-6 text-center text-[11px] font-semibold text-[#2c1f3d]/80">All mages have locked in their scrolls. Tap Attack to resolve the round.</div>;
   }
 
-  const budget = battle.energy + battle.soul;
+  const budget = hero.energy ?? 0;
   let cards = cardsForHero(battle, hero);
   if (filter !== 'all') cards = cards.filter((c) => c.type === filter);
   cards = cards.slice().sort((a, b) => (a.isUltimate ? 1 : 0) - (b.isUltimate ? 1 : 0) || a.cost - b.cost);

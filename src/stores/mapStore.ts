@@ -53,6 +53,10 @@ interface MapStore {
    *  input is ignored entirely while resting (you can't drift off mid-heal);
    *  only the Rest button (toggleRest) or an interrupting encounter ends it. */
   resting: boolean;
+  /** Increments once per successful regen tick while resting — MapPage
+   *  watches this to pop a fresh "+3 HP" indicator each second without
+   *  re-deriving its own separate timer. */
+  restPulse: number;
 
   enterMap: (mapId: string, spawn?: Vec2) => void;
   changeMap: (mapId: string, spawn: Vec2) => void;
@@ -102,6 +106,7 @@ export const useMapStore = create<MapStore>()(
       visitedMaps: [HUB_MAP_ID],
       areaBanner: null,
       resting: false,
+      restPulse: 0,
 
       enterMap: (mapId, spawn) => {
         const map = MAPS[mapId];
@@ -155,6 +160,7 @@ export const useMapStore = create<MapStore>()(
           if (now - lastRestTick >= REST_TICK_MS) {
             lastRestTick = now;
             useGameStore.getState().regenParty(map.safe ? REST_HP_PER_SEC.safe : REST_HP_PER_SEC.field);
+            set({ restPulse: get().restPulse + 1 });
           }
 
           let nextRoamers = stepAggro(roamers, map, playerPos, 4.5);

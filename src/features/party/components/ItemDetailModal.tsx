@@ -10,11 +10,18 @@ interface ItemDetailModalProps {
   item: ItemDef | null;
   qty: number;
   onClose: () => void;
+  /** Opens the socket picker for this Card/Soul Crystal — a plain tap here
+   *  (not a desktop-only dblclick/right-click) so the whole equip/socket
+   *  flow works identically on touch and mouse. */
+  onSocket: (itemId: string) => void;
 }
 
-/** Right-click (or long-press) a Backpack item to see its full details —
- *  the grid only shows an icon, so this is where name/desc/stat bonus live. */
-export function ItemDetailModal({ item, qty, onClose }: ItemDetailModalProps) {
+/** Tap a Backpack item to see its full details — the grid only shows an
+ *  icon, so this is where name/desc/stat bonus (and, for Cards/Soul
+ *  Crystals, the Socket action) live. Single-tap is deliberate: mobile
+ *  browsers don't reliably fire contextmenu/dblclick from touch, so those
+ *  are no longer load-bearing for any interaction here. */
+export function ItemDetailModal({ item, qty, onClose, onSocket }: ItemDetailModalProps) {
   if (!item) return null;
   const statEntries = (Object.keys(item.statBonus ?? {}) as StatKey[]).filter((k) => item.statBonus?.[k]);
 
@@ -67,6 +74,15 @@ export function ItemDetailModal({ item, qty, onClose }: ItemDetailModalProps) {
             )}
             {!!item.reqLevel && (
               <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-2 text-center text-[10.5px] font-bold text-white/60">🔒 Requires Lv {item.reqLevel} to equip/socket</div>
+            )}
+            {(item.category === 'card' || item.category === 'soul') && (
+              <button
+                onClick={() => onSocket(item.id)}
+                className="mt-3 w-full rounded-xl px-3 py-2.5 font-['Baloo_2'] text-[12px] font-extrabold text-[#06281a]"
+                style={{ background: 'linear-gradient(135deg,var(--color-success),#8df0b8)' }}
+              >
+                Socket into gear…
+              </button>
             )}
           </motion.div>
         </motion.div>

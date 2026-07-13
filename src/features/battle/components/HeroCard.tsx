@@ -251,6 +251,7 @@ export function HeroCard({ hero, side, isSelected, planLabel, isPass, orderRank,
         <div className="mt-0.5 text-[7px] font-bold text-white/40 lg:text-[9px]">
           {Math.max(0, hero.hp)} / {hero.maxHp}
           {hero.block > 0 && <span className="ml-1 font-extrabold text-[#9fd0ff]">🛡{hero.block}</span>}
+          {side === 'player' && <span className="ml-1 font-extrabold text-[#ffe09a]">⚡{hero.energy ?? 0}/{hero.maxEnergy ?? 0}</span>}
         </div>
       </div>
     </motion.div>

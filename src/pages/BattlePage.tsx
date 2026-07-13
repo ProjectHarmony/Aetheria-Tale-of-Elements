@@ -57,6 +57,34 @@ export function BattlePage() {
   const won = battle?.phase === 'ended' && battle.winner === 'players';
   const ended = battle?.phase === 'ended';
 
+  // Pokemon-style HP: persists whatever each mage ended the fight with
+  // (including 0, if they got knocked out but the party still won) instead
+  // of auto-healing back to full for the next encounter. A full party wipe
+  // is the one exception — everyone wakes up at the hub with a mercy 1 HP
+  // rather than staying at 0 (see mapStore.resolveEncounter for the actual
+  // hub-return/position reset this pairs with).
+  //
+  // This MUST run before the XP-grant effect below: grantXp can level a
+  // mage up mid-battle-end and gives them a fresh full heal at their NEW
+  // max HP (see progression.ts) — if this effect ran second, it would
+  // immediately overwrite that full heal with the stale battle-end HP
+  // value (computed against the OLD, lower max), silently undoing the
+  // level-up heal and leaving HP looking inconsistent from fight to fight.
+  useEffect(() => {
+    if (!ended || battleContext !== 'adventure' || !battle || hpSyncedRef.current) return;
+    hpSyncedRef.current = true;
+    if (won) {
+      const hpByEl: Partial<Record<Element, number>> = {};
+      battle.players.forEach((h) => { hpByEl[h.el] = h.hp; });
+      syncPartyHp(hpByEl);
+    } else if (party) {
+      const hpByEl: Partial<Record<Element, number>> = {};
+      party.picks.forEach((el) => { hpByEl[el] = 1; });
+      syncPartyHp(hpByEl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ended, battleContext]);
+
   useEffect(() => {
     if (!won || battleContext !== 'adventure' || xpGrantedRef.current) return;
     xpGrantedRef.current = true;
@@ -74,27 +102,6 @@ export function BattlePage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [won, battleContext]);
-
-  // Pokemon-style HP: persists whatever each mage ended the fight with
-  // (including 0, if they got knocked out but the party still won) instead
-  // of auto-healing back to full for the next encounter. A full party wipe
-  // is the one exception — everyone wakes up at the hub with a mercy 1 HP
-  // rather than staying at 0 (see mapStore.resolveEncounter for the actual
-  // hub-return/position reset this pairs with).
-  useEffect(() => {
-    if (!ended || battleContext !== 'adventure' || !battle || hpSyncedRef.current) return;
-    hpSyncedRef.current = true;
-    if (won) {
-      const hpByEl: Partial<Record<Element, number>> = {};
-      battle.players.forEach((h) => { hpByEl[h.el] = h.hp; });
-      syncPartyHp(hpByEl);
-    } else if (party) {
-      const hpByEl: Partial<Record<Element, number>> = {};
-      party.picks.forEach((el) => { hpByEl[el] = 1; });
-      syncPartyHp(hpByEl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ended, battleContext]);
 
   // Feeds the outcome back to the map: a win starts the defeated roamer's
   // respawn cooldown (or marks the MVP world-singleton dead); a loss leaves

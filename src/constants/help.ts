@@ -34,8 +34,8 @@ export const HELP_SECTIONS: HelpSection[] = [
   },
   {
     icon: '⚡',
-    title: 'Energy & Soul Charge',
-    text: "Your team shares one Energy pool that regenerates a flat amount each round. Casting a scroll costs Energy — <b>and it's spent the instant you confirm a target, with no take-backs.</b> A mage can cast up to 3 scrolls in one round if you have the Energy for it. Energy banked above the cap overflows into <b>Soul Charge</b> (max 2), which can cover costs later so nothing goes to waste.",
+    title: 'Energy',
+    text: "Every mage has their own Energy pool that regenerates a flat amount each round — spending it doesn't touch your other mages' Energy. Casting a scroll costs Energy — <b>and it's spent the instant you confirm a target, with no take-backs.</b> A mage can cast up to 3 scrolls in one round if they have the Energy for it.",
   },
   {
     icon: '🛡️',

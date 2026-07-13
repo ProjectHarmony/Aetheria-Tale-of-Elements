@@ -1,5 +1,5 @@
 import type { BattleEvent, Card, Hero } from '@/types';
-import { DEFAULT_BURN_DMG, DEFAULT_BURN_TICKS, elementCounterMult, matchup } from '@/constants';
+import { DEFAULT_BURN_DMG, DEFAULT_BURN_TICKS, MAX_ENERGY, elementCounterMult, matchup } from '@/constants';
 
 /** Any status a target is currently under — feeds `dmgVsAnyDebuffPct` (Exploit). */
 function hasAnyDebuff(h: Hero): boolean {
@@ -159,7 +159,6 @@ export function applyOnHitRiders(
   dealt: number,
   killed: boolean,
   allyTeam: Hero[],
-  energyState: { energy: number; maxEnergy: number },
 ): BattleEvent[] {
   const events: BattleEvent[] = [];
   const eff = card.effect ?? {};
@@ -192,8 +191,8 @@ export function applyOnHitRiders(
   }
   if (eff.targetSpeedDown) { target.speedNextRound = Math.min(target.speedNextRound, -eff.targetSpeedDown); events.push({ type: 'buffApplied', targetId: target.id, statusKind: 'speedDown' }); }
 
-  if (killed && eff.energyRefundOnKill) energyState.energy = Math.min(energyState.maxEnergy, energyState.energy + eff.energyRefundOnKill);
-  if (eff.energyRefundChance && Math.random() < eff.energyRefundChance) energyState.energy = Math.min(energyState.maxEnergy, energyState.energy + 1);
+  if (killed && eff.energyRefundOnKill) actor.energy = Math.min(actor.maxEnergy ?? MAX_ENERGY, (actor.energy ?? 0) + eff.energyRefundOnKill);
+  if (eff.energyRefundChance && Math.random() < eff.energyRefundChance) actor.energy = Math.min(actor.maxEnergy ?? MAX_ENERGY, (actor.energy ?? 0) + 1);
 
   if (eff.tauntRounds) {
     actor.tauntRoundsLeft = Math.max(actor.tauntRoundsLeft ?? 0, eff.tauntRounds);
@@ -276,7 +275,6 @@ export function applyBuffCard(
   card: Card,
   team: Hero[],
   enemyTeam: Hero[],
-  energyState: { energy: number; maxEnergy: number },
 ): BattleEvent[] {
   const events: BattleEvent[] = [];
   const eff = card.effect ?? {};
@@ -323,7 +321,7 @@ export function applyBuffCard(
       events.push({ type: 'heal', targetId: fallen.id, amount: fallen.hp });
     }
   }
-  if (eff.energyGain) energyState.energy = Math.min(energyState.maxEnergy, energyState.energy + eff.energyGain);
+  if (eff.energyGain) team.forEach((h) => { if (h.alive) h.energy = Math.min(h.maxEnergy ?? MAX_ENERGY, (h.energy ?? 0) + eff.energyGain!); });
 
   // Debuffs reuse the buffs' round-scoped fields with a negative magnitude —
   // Math.min (not Max) so the STRONGER debuff wins if two stack.

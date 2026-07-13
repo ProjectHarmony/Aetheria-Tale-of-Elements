@@ -143,7 +143,7 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       const card = cardById(battle, cardId);
       if (!hero || !card) return;
       const stillPlayable = cardsForHero(battle, hero).some((c) => c.id === cardId);
-      if (!stillPlayable || card.cost > battle.energy + battle.soul) return;
+      if (!stillPlayable || card.cost > (hero.energy ?? 0)) return;
       battle.pendingCardId = battle.pendingCardId === cardId ? null : cardId;
       publish(battle);
     },
@@ -166,7 +166,7 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       if (!hero || !card) { battle.pendingCardId = null; publish(battle); return; }
       // Re-validate in case state shifted while the card sat staged (e.g. energy spent elsewhere).
       const stillPlayable = cardsForHero(battle, hero).some((c) => c.id === card.id);
-      if (!stillPlayable || card.cost > battle.energy + battle.soul) { battle.pendingCardId = null; publish(battle); return; }
+      if (!stillPlayable || card.cost > (hero.energy ?? 0)) { battle.pendingCardId = null; publish(battle); return; }
 
       if (card.kind === 'buff') {
         commitPlannedCast(battle, hero.id, card.id, hero.id);

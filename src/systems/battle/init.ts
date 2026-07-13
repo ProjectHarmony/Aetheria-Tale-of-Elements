@@ -1,5 +1,5 @@
 import type { BattleState, Card, Hero } from '@/types';
-import { DECK_CONFIG, MAX_ENERGY, MAX_SOUL, STARTING_ENERGY } from '@/constants';
+import { DECK_CONFIG } from '@/constants';
 import { drawCards } from './deck';
 import { getPlanningOrder } from './planning';
 
@@ -11,10 +11,6 @@ export function createInitialBattleState(players: Hero[], enemies: Hero[], runti
     players,
     enemies,
     runtimeCards,
-    energy: STARTING_ENERGY,
-    maxEnergy: MAX_ENERGY,
-    soul: 0,
-    maxSoul: MAX_SOUL,
     round: 1,
     combo: 0,
     phase: 'planning',

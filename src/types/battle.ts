@@ -7,8 +7,8 @@ export type BattlePhase = 'planning' | 'resolving' | 'ended';
 export interface PlayerCast {
   cardId: string;
   targetId: string;
+  /** Always the card's full cost — energy is per-mage now (Hero.energy), no shared team pool/Soul reserve to split the cost across. Kept so undo can refund it. */
   fromEnergy: number;
-  fromSoul: number;
 }
 
 /** The enemy AI's single hidden action for the round, revealed at resolution.
@@ -28,11 +28,6 @@ export interface BattleState {
   enemies: Hero[];
   /** Per-battle, rank-aware skill->card instances for the player's team. */
   runtimeCards: Record<string, Card>;
-
-  energy: number;
-  maxEnergy: number;
-  soul: number;
-  maxSoul: number;
 
   round: number;
   combo: number;

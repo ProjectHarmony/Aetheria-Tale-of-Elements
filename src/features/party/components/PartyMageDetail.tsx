@@ -126,7 +126,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
         />
       )}
       {subTab === 'equipment' && (
-        <EquipmentTab el={el} mage={mage} onOpenSlot={setOpenGearSlot} onOpenSocket={setSocketItemId} onOpenDetail={setDetailItemId} />
+        <EquipmentTab el={el} mage={mage} onOpenSlot={setOpenGearSlot} onOpenDetail={setDetailItemId} />
       )}
 
       {pending && (subTab === 'stats' || subTab === 'skills') && (
@@ -217,7 +217,12 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
       />
       <GearSlotSheet slot={openGearSlot} el={el} mage={mage} onClose={() => setOpenGearSlot(null)} />
       <CardSocketSheet item={socketItemId ? ITEMS_BY_ID[socketItemId] ?? null : null} el={el} mage={mage} onClose={() => setSocketItemId(null)} />
-      <ItemDetailModal item={detailItemId ? ITEMS_BY_ID[detailItemId] ?? null : null} qty={detailItemId ? inventory[detailItemId] ?? 0 : 0} onClose={() => setDetailItemId(null)} />
+      <ItemDetailModal
+        item={detailItemId ? ITEMS_BY_ID[detailItemId] ?? null : null}
+        qty={detailItemId ? inventory[detailItemId] ?? 0 : 0}
+        onClose={() => setDetailItemId(null)}
+        onSocket={(itemId) => { setDetailItemId(null); setSocketItemId(itemId); }}
+      />
     </div>
   );
 }

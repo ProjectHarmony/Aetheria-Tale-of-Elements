@@ -1,5 +1,5 @@
 import type { BattleEvent, BattleState, Card, EnemyPlan, Hero, PlayerCast } from '@/types';
-import { ALL_SKILLS_BY_ID, DECK_CONFIG, ENERGY_PER_ROUND, RESOLUTION_HIT_DELAY_MS, RESOLUTION_STEP_GAP_MS, skillDamage } from '@/constants';
+import { ALL_SKILLS_BY_ID, DECK_CONFIG, ENERGY_PER_ROUND, MAX_ENERGY, RESOLUTION_HIT_DELAY_MS, RESOLUTION_STEP_GAP_MS, skillDamage } from '@/constants';
 import { delay } from '@/utils/delay';
 import { applyBuffCard, applyHit, applyOnHitRiders, computeAttackDamage, tickHeroStatuses } from './combat';
 import { cardById, drawCards, flushPendingDiscards, shuffleArray, validTargets } from './deck';
@@ -12,16 +12,8 @@ interface QueueStep {
   speed: number;
 }
 
-export function regenEnergyForRound(state: Pick<BattleState, 'energy' | 'maxEnergy' | 'soul' | 'maxSoul'>): { gained: number; overflow: number } {
-  let total = state.energy + ENERGY_PER_ROUND;
-  let overflow = 0;
-  if (total > state.maxEnergy) {
-    overflow = total - state.maxEnergy;
-    state.soul = Math.min(state.maxSoul, state.soul + overflow);
-    total = state.maxEnergy;
-  }
-  state.energy = total;
-  return { gained: ENERGY_PER_ROUND, overflow };
+function regenHeroEnergy(h: Hero): void {
+  h.energy = Math.min(h.maxEnergy ?? MAX_ENERGY, (h.energy ?? 0) + ENERGY_PER_ROUND);
 }
 
 /** Enemy AI: picks the strongest (highest-cost) currently-affordable skill
@@ -69,7 +61,7 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
   // (like players do) since an enemy's "planning" and "resolution" are the
   // same step, unlike the player's split plan/resolve phases.
   for (const e of aliveHeroes(state.enemies)) {
-    e.energy = Math.min(e.maxEnergy ?? 10, (e.energy ?? 0) + ENERGY_PER_ROUND);
+    regenHeroEnergy(e);
 
     const targets = validTargets(state.players, null);
     if (targets.length === 0) continue;
@@ -163,7 +155,7 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
     // whether the card also deals direct damage (covers both classic buff
     // cards and hybrid Ultimates like World Pillar: AoE dmg + team shield + taunt).
     if (card && card.effect) {
-      const buffEvents = applyBuffCard(card, ownTeam, opposingTeam, state);
+      const buffEvents = applyBuffCard(card, ownTeam, opposingTeam);
       for (const ev of buffEvents) yield ev;
       if (card.effect.cooldownRounds) {
         actor.skillCooldowns = { ...actor.skillCooldowns, [card.id]: card.effect.cooldownRounds };
@@ -226,7 +218,7 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
           if (!t.alive) yield { type: 'death', targetId: t.id };
 
           if (card) {
-            const riderEvents = applyOnHitRiders(actor, t, card, applied.dealt, !t.alive, alliesOfActor, state);
+            const riderEvents = applyOnHitRiders(actor, t, card, applied.dealt, !t.alive, alliesOfActor);
             for (const ev of riderEvents) yield ev;
           }
         }
@@ -263,7 +255,7 @@ export async function* resolveRound(state: BattleState): AsyncGenerator<BattleEv
     if (step.side === 'player') {
       state.combo = (state.combo + 1) % 3;
       const energyGranted = state.combo === 0;
-      if (energyGranted) state.energy = Math.min(state.maxEnergy, state.energy + 1);
+      if (energyGranted) actor.energy = Math.min(actor.maxEnergy ?? MAX_ENERGY, (actor.energy ?? 0) + 1);
       yield { type: 'combo', comboValue: state.combo, energyGranted };
     }
 
@@ -321,7 +313,7 @@ function* endRound(state: BattleState): Generator<BattleEvent, void, unknown> {
   state.plans = {};
   state.heroDone = {};
   state.phase = 'planning';
-  const regen = regenEnergyForRound(state);
+  aliveHeroes(state.players).forEach(regenHeroEnergy);
   state.planningHeroId = currentPlanningHero(state)?.id ?? null;
 
   aliveHeroes(state.players).forEach((h) => {
@@ -329,6 +321,6 @@ function* endRound(state: BattleState): Generator<BattleEvent, void, unknown> {
     if (need > 0) drawCards(h, need);
   });
 
-  yield { type: 'log', message: `Round ${state.round} begins — +${regen.gained} energy${regen.overflow > 0 ? ` (+${regen.overflow} Soul Charge overflow)` : ''}.` };
+  yield { type: 'log', message: `Round ${state.round} begins — +${ENERGY_PER_ROUND} energy.` };
   yield { type: 'roundEnd' };
 }

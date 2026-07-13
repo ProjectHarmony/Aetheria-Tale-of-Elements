@@ -27,10 +27,9 @@ interface EquipmentTabProps {
   mage: MageState;
   onOpenSlot: (slot: GearSlot) => void;
   onOpenDetail: (itemId: string) => void;
-  onOpenSocket: (itemId: string) => void;
 }
 
-export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail, onOpenSocket }: EquipmentTabProps) {
+export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail }: EquipmentTabProps) {
   const inventory = useGameStore((s) => s.inventory);
   const equipItem = useGameStore((s) => s.equipItem);
   const [category, setCategory] = useState<ItemCategory>('equipment');
@@ -105,12 +104,12 @@ export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail, onOpenSocket 
           {bagItems.map(({ def, qty }) => {
             const locked = mage.level < (def.reqLevel ?? 0);
             return (
-              <div
+              <button
                 key={def.id}
+                type="button"
                 draggable={def.category === 'equipment'}
                 onDragStart={(e) => e.dataTransfer.setData(DRAG_MIME, def.id)}
-                onDoubleClick={() => { if (def.category === 'card' || def.category === 'soul') onOpenSocket(def.id); }}
-                onContextMenu={(e) => { e.preventDefault(); onOpenDetail(def.id); }}
+                onClick={() => onOpenDetail(def.id)}
                 className={`relative flex aspect-square flex-col items-center justify-center rounded-md border bg-black/20 text-base ${def.category === 'equipment' ? 'cursor-grab active:cursor-grabbing' : ''} ${locked ? 'opacity-50' : ''}`}
                 style={{ borderColor: def.rarity ? `${RARITY_COLOR[def.rarity]}80` : 'rgba(255,255,255,0.12)' }}
               >
@@ -119,13 +118,13 @@ export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail, onOpenSocket 
                 {qty > 1 && (
                   <span className="absolute bottom-0 right-0.5 font-['Baloo_2'] text-[7px] font-extrabold text-white/70">×{qty}</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
       )}
       <div className="mt-2 text-center text-[9px] leading-snug text-white/30">
-        Drag Equipment onto a slot to wear it · Double-tap a Card/Soul Crystal to socket it · Right-click any item for details
+        Tap any item for details · Drag Equipment onto a slot to wear it (or tap the slot above) · Socket Cards/Soul Crystals from the details popup
       </div>
     </div>
   );

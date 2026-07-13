@@ -87,8 +87,8 @@ export function validTargets(enemyTeam: Hero[], card: Card | null): Hero[] {
   return front.length > 0 ? front : alive;
 }
 
-export function heroHasAnyValidPlay(state: Pick<BattleState, 'runtimeCards' | 'energy' | 'soul'>, hero: Hero, enemies: Hero[]): boolean {
-  const budget = state.energy + state.soul;
+export function heroHasAnyValidPlay(state: Pick<BattleState, 'runtimeCards'>, hero: Hero, enemies: Hero[]): boolean {
+  const budget = hero.energy ?? 0;
   const playable = cardsForHero(state, hero).filter((c) => c.cost <= budget);
   return playable.some((c) => c.kind === 'buff' || validTargets(enemies, c).length > 0);
 }

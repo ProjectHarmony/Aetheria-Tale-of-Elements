@@ -69,9 +69,9 @@ export interface Hero {
   elementLevel?: number;
   elementResistLevel?: number;
 
-  /** Enemy-only: independent per-hero energy pool (players share one pool on
-   *  BattleState instead). Regens every round, gates which moveset skill the
-   *  AI can afford. Absent on players. */
+  /** Independent per-hero energy pool — every mage (and every monster) has
+   *  their own, spent on their own casts and regenerating on their own each
+   *  round (see ENERGY_PER_ROUND). No shared team pool/Soul reserve. */
   energy?: number;
   maxEnergy?: number;
   /** Enemy-only: the monster's resolved skill kit (basic attack + Role/Boss/Tier skills), built at team-assembly time. */

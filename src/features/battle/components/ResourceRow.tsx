@@ -1,43 +1,42 @@
 import { motion } from 'framer-motion';
 import type { BattleState } from '@/types';
+import { ELEMENT_META } from '@/constants';
 
 interface ResourceRowProps {
   battle: BattleState;
 }
 
+/** One chip per living mage — energy is per-hero now, so there's no single
+ *  team total left to show; each mage's own pool renders side by side. */
 export function ResourceRow({ battle }: ResourceRowProps) {
-  const pips = Array.from({ length: battle.maxEnergy }, (_, i) => i < battle.energy);
-  const soulPct = (battle.soul / battle.maxSoul) * 100;
+  const heroes = battle.players.filter((h) => h.alive);
 
   return (
-    <div className="relative z-10 mx-3 flex items-center justify-center gap-2.5 rounded-xl border border-white/12 bg-[#100a1a]/82 px-3.5 py-1.5 shadow-lg">
-      <span className="text-[8.5px] font-extrabold uppercase tracking-wide text-white/45">⚡ Energy</span>
-      <div className="flex gap-[3px]">
-        {pips.map((on, i) => (
-          <motion.div
-            key={i}
-            className="h-2.5 w-2.5 rounded-[3px] border"
-            animate={{
-              background: on ? 'linear-gradient(135deg,#ffc85c,#ffe09a)' : 'rgba(255,255,255,0.08)',
-              borderColor: on ? '#ffc85c' : 'rgba(255,200,80,0.16)',
-              boxShadow: on ? '0 0 5px rgba(255,200,80,0.5)' : 'none',
-            }}
-          />
-        ))}
-      </div>
-      <span className="text-[9px] font-extrabold text-[#ffe09a]">{battle.energy}/{battle.maxEnergy}</span>
-
-      <div className="mx-1 h-4 w-px bg-white/10" />
-
-      <span className="ml-0.5 text-[8.5px]">🔮</span>
-      <div className="relative h-[18px] w-[18px] overflow-hidden rounded-full border-[1.5px] border-[rgba(201,168,255,0.45)] bg-white/6">
-        <motion.div
-          className="absolute inset-x-0 bottom-0"
-          style={{ background: 'linear-gradient(180deg,var(--color-wind-glow),var(--color-wind))' }}
-          animate={{ height: `${soulPct}%` }}
-          transition={{ duration: 0.3 }}
-        />
-      </div>
+    <div className="relative z-10 mx-3 flex items-center justify-center gap-2 rounded-xl border border-white/12 bg-[#100a1a]/82 px-3.5 py-1.5 shadow-lg">
+      {heroes.map((h) => {
+        const max = h.maxEnergy ?? 0;
+        const energy = h.energy ?? 0;
+        const meta = ELEMENT_META[h.el];
+        return (
+          <div key={h.id} className="flex items-center gap-1.5">
+            <span className="text-[10px]" style={{ filter: `drop-shadow(0 0 3px ${meta.color})` }}>{meta.icon}</span>
+            <div className="flex gap-[2px]">
+              {Array.from({ length: max }, (_, i) => i < energy).map((on, i) => (
+                <motion.div
+                  key={i}
+                  className="h-2 w-2 rounded-[2px] border"
+                  animate={{
+                    background: on ? 'linear-gradient(135deg,#ffc85c,#ffe09a)' : 'rgba(255,255,255,0.08)',
+                    borderColor: on ? '#ffc85c' : 'rgba(255,200,80,0.16)',
+                    boxShadow: on ? '0 0 4px rgba(255,200,80,0.5)' : 'none',
+                  }}
+                />
+              ))}
+            </div>
+            <span className="text-[8.5px] font-extrabold text-[#ffe09a]">{energy}/{max}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

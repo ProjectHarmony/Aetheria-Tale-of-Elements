@@ -41,6 +41,7 @@ export function MapPage() {
   const clearEncounter = useMapStore((s) => s.clearEncounter);
   const triggerEncounter = useMapStore((s) => s.triggerEncounter);
   const resting = useMapStore((s) => s.resting);
+  const restPulse = useMapStore((s) => s.restPulse);
   const toggleRest = useMapStore((s) => s.toggleRest);
   const setBattleContext = useGameStore((s) => s.setBattleContext);
   const navigate = useNavigate();
@@ -212,6 +213,19 @@ export function MapPage() {
         <div className="absolute flex h-8 w-8 items-center justify-center text-2xl" style={{ left: playerPos.x - 16, top: playerPos.y - 16, filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.4))' }}>
           🧙
         </div>
+
+        {resting && (
+          <motion.div
+            key={restPulse}
+            initial={{ opacity: 1, y: 0, scale: 0.9 }}
+            animate={{ opacity: 0, y: -26, scale: 1.1 }}
+            transition={{ duration: 0.9, ease: 'easeOut' }}
+            className="pointer-events-none absolute font-['Baloo_2'] text-sm font-extrabold text-[var(--color-success)]"
+            style={{ left: playerPos.x, top: playerPos.y - 30, transform: 'translateX(-50%)', textShadow: '0 2px 4px rgba(0,0,0,0.6)' }}
+          >
+            +{map.safe ? 3 : 1} HP
+          </motion.div>
+        )}
       </div>
 
       <div className="absolute left-0 right-0 top-0 z-40 flex items-start justify-between p-3.5">
