@@ -19,13 +19,24 @@ function regenHeroEnergy(h: Hero): void {
 /** Enemy AI: picks the strongest (highest-cost) currently-affordable skill
  *  from the monster's own kit, falling back to nothing playable (shouldn't
  *  happen — every monster's basic attack costs 1e and starting energy is
- *  always >= 1). Ties broken randomly for a little variety. */
+ *  always >= 1). Ties broken randomly for a little variety.
+ *
+ *  Restricted to attack-kind skills 70% of the time (when one is affordable)
+ *  before applying that same highest-cost pick: a flat "priciest wins" choice
+ *  starves out damage entirely for Healer-role monsters, whose priciest kit
+ *  options (Mend/Rally, and a Boss's signature like Vigil's Embrace) are all
+ *  pure heals/buffs costing more than their one weak basic attack — so a
+ *  Healer boss with enough Energy would never once choose to attack. This
+ *  keeps that support flavor (still heals/buffs ~30% of rounds, or whenever
+ *  it can't afford any attack) while guaranteeing it mostly still fights. */
 function chooseEnemySkill(actor: Hero): Card | null {
   const moveset = actor.moveset ?? [];
   const affordable = moveset.filter((c) => c.cost <= (actor.energy ?? 0) && !(actor.skillCooldowns?.[c.id] ?? 0));
   if (affordable.length === 0) return null;
-  const maxCost = Math.max(...affordable.map((c) => c.cost));
-  const best = affordable.filter((c) => c.cost === maxCost);
+  const attacks = affordable.filter((c) => c.kind === 'attack');
+  const pool = attacks.length > 0 && Math.random() < 0.7 ? attacks : affordable;
+  const maxCost = Math.max(...pool.map((c) => c.cost));
+  const best = pool.filter((c) => c.cost === maxCost);
   return best[Math.floor(Math.random() * best.length)] ?? null;
 }
 
@@ -312,6 +323,7 @@ function* endRound(state: BattleState): Generator<BattleEvent, void, unknown> {
   state.round += 1;
   state.plans = {};
   state.heroDone = {};
+  state.lockedThisRound = {};
   state.phase = 'planning';
   aliveHeroes(state.players).forEach(regenHeroEnergy);
   state.planningHeroId = currentPlanningHero(state)?.id ?? null;

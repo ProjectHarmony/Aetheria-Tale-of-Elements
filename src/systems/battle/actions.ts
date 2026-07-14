@@ -56,7 +56,7 @@ function popLastCast(state: BattleState, heroId: string): string | null {
 /** The small ↩ button above a hero's head: fully undoes their last cast (or
  *  un-passes them) with no re-staging — hand goes back to unselected. */
 export function undoLastCast(state: BattleState, heroId: string): void {
-  if (state.phase !== 'planning') return;
+  if (state.phase !== 'planning' || state.lockedThisRound[heroId]) return;
   const h = heroById(state, heroId);
   if (!h) return;
   popLastCast(state, heroId);
@@ -81,7 +81,7 @@ export function selectHeroForPlanning(state: BattleState, heroId: string): void 
  *  than tapping their portrait and finding no trace of the pick. A passed
  *  hero just un-passes; a hero who hasn't acted yet just switches focus. */
 export function reopenHeroForEditing(state: BattleState, heroId: string): void {
-  if (state.phase !== 'planning') return;
+  if (state.phase !== 'planning' || state.lockedThisRound[heroId]) return;
   const h = heroById(state, heroId);
   if (!h || !h.alive || !state.players.some((p) => p.id === heroId)) return;
 

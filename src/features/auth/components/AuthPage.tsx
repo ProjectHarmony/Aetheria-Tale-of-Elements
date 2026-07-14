@@ -41,7 +41,7 @@ export function AuthPage() {
       </motion.div>
       <div className="text-center">
         <div className="font-['Baloo_2'] text-[26px] font-extrabold text-[#2c1f3d]">Two Elements</div>
-        <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.25em] text-[#2c1f3d]/70">Realm of Caelyra</div>
+        <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.25em] text-[#2c1f3d]/70">Realm of Aetheria</div>
       </div>
 
       <div className="w-full max-w-[320px] rounded-[20px] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 backdrop-blur-md">

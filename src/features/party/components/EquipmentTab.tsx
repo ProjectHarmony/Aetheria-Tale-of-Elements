@@ -102,19 +102,19 @@ export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail }: EquipmentTa
       ) : (
         <div className="grid grid-cols-[repeat(10,minmax(0,1fr))] gap-1">
           {bagItems.map(({ def, qty }) => {
-            const locked = mage.level < (def.reqLevel ?? 0);
+            const unidentified = def.identified === false;
             return (
               <button
                 key={def.id}
                 type="button"
-                draggable={def.category === 'equipment'}
+                draggable={def.category === 'equipment' && !unidentified}
                 onDragStart={(e) => e.dataTransfer.setData(DRAG_MIME, def.id)}
                 onClick={() => onOpenDetail(def.id)}
-                className={`relative flex aspect-square flex-col items-center justify-center rounded-md border bg-black/20 text-base ${def.category === 'equipment' ? 'cursor-grab active:cursor-grabbing' : ''} ${locked ? 'opacity-50' : ''}`}
+                className={`relative flex aspect-square flex-col items-center justify-center rounded-md border bg-black/20 text-base ${def.category === 'equipment' && !unidentified ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 style={{ borderColor: def.rarity ? `${RARITY_COLOR[def.rarity]}80` : 'rgba(255,255,255,0.12)' }}
               >
                 {def.icon}
-                {locked && <span className="absolute left-0.5 top-0.5 text-[8px]">🔒</span>}
+                {unidentified && <span className="absolute left-0.5 top-0.5 text-[8px]">❓</span>}
                 {qty > 1 && (
                   <span className="absolute bottom-0 right-0.5 font-['Baloo_2'] text-[7px] font-extrabold text-white/70">×{qty}</span>
                 )}
@@ -124,7 +124,7 @@ export function EquipmentTab({ el, mage, onOpenSlot, onOpenDetail }: EquipmentTa
         </div>
       )}
       <div className="mt-2 text-center text-[9px] leading-snug text-white/30">
-        Tap any item for details · Drag Equipment onto a slot to wear it (or tap the slot above) · Socket Cards/Soul Crystals from the details popup
+        Tap any item for details · Drag Equipment onto a slot to wear it (or tap the slot above) · Socket Cards/Soul Crystals from the details popup · Unidentified gear needs an Identify Scroll
       </div>
     </div>
   );

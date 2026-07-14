@@ -23,7 +23,6 @@ export function CardSocketSheet({ item, el, mage, onClose }: CardSocketSheetProp
 
   if (!item) return null;
   const slots: GearSlot[] = item.category === 'card' ? CARD_SOCKET_SLOTS : item.category === 'soul' ? [SOUL_SOCKET_SLOT] : [];
-  const levelLocked = mage.level < (item.reqLevel ?? 0);
 
   const rows = slots.map((slot) => {
     const worn = mage.gear[slot];
@@ -56,16 +55,10 @@ export function CardSocketSheet({ item, el, mage, onClose }: CardSocketSheetProp
               <button onClick={onClose} className="text-xl text-white/40">✕</button>
             </div>
 
-            {levelLocked && (
-              <div className="mb-3 rounded-lg border border-white/12 bg-black/25 p-2 text-center text-[10.5px] font-bold text-white/50">
-                🔒 Requires Lv {item.reqLevel} — this mage is only Lv {mage.level}.
-              </div>
-            )}
-
             <div className="flex flex-col gap-1.5">
               {rows.map(({ slot, worn, wornDef, capacity }) => {
                 const full = worn ? worn.socketedIds.length >= capacity : false;
-                const disabled = !worn || capacity === 0 || full || levelLocked;
+                const disabled = !worn || capacity === 0 || full;
                 return (
                   <button
                     key={slot}

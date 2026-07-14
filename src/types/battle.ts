@@ -37,6 +37,12 @@ export interface BattleState {
   pendingCardId: string | null;
   plans: PlanMap;
   heroDone: Record<string, boolean>;
+  /** Heroes whose turn this round was spent on something irreversible (a
+   *  consumable item — heals + burns an inventory item with no queued
+   *  PlayerCast to undo). reopenHeroForEditing/selectHero refuse to reopen
+   *  these, otherwise re-selecting the same "done" hero and using another
+   *  item was a free, unlimited heal loop (nothing was ever there to undo). */
+  lockedThisRound: Record<string, boolean>;
 
   planningTimeLeft: number;
   enemyActionsRemaining: number;

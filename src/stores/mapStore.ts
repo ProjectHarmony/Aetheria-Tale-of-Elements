@@ -82,11 +82,15 @@ let lastRestTick = 0;
 
 /** A Boss roamer always pulls its 2 Underlings into the battle alongside it —
  *  the Underlings never roam the map themselves (slot -1: no map presence,
- *  no independent respawn tracking), they only exist as battle participants. */
+ *  no independent respawn tracking), they only exist as battle participants.
+ *  A regular/elite roamer authored with its own `companions` (see MonsterSlot
+ *  — a sparse minority of field spawns: same-species packs, or a stronger
+ *  monster's lower-level underling) works the same way. */
 function encounterGroup(hitRoamer: Roamer): { slot: number; name: string }[] {
   const underlings = BOSS_UNDERLINGS[hitRoamer.name];
-  if (!underlings) return [{ slot: hitRoamer.slot, name: hitRoamer.name }];
-  return [{ slot: hitRoamer.slot, name: hitRoamer.name }, ...underlings.map((name) => ({ slot: -1, name }))];
+  const companions = underlings ?? hitRoamer.companions;
+  if (!companions) return [{ slot: hitRoamer.slot, name: hitRoamer.name }];
+  return [{ slot: hitRoamer.slot, name: hitRoamer.name }, ...companions.map((name) => ({ slot: -1, name }))];
 }
 
 /** Only "where was I" + exploration progress persist — roamers, joystick

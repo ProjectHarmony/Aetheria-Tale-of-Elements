@@ -1,6 +1,15 @@
 import type { BattleEvent, Card, Hero } from '@/types';
 import { DEFAULT_BURN_DMG, DEFAULT_BURN_TICKS, MAX_ENERGY, elementCounterMult, matchup } from '@/constants';
 
+/** Aetheria Database Freeze resistance by Tier: Bosses shrug it off entirely,
+ *  Mini-Bosses shake it half the time, everything else (regular/elite, and
+ *  players) freezes normally. */
+function canBeFrozen(h: Hero): boolean {
+  if (h.tier === 'boss') return false;
+  if (h.tier === 'miniboss') return Math.random() < 0.5;
+  return true;
+}
+
 /** Any status a target is currently under — feeds `dmgVsAnyDebuffPct` (Exploit). */
 function hasAnyDebuff(h: Hero): boolean {
   return h.dmgUpRound < 0 || h.dodgeUpRound < 0 || h.accDownRound > 0 || (h.dmgDownRoundsLeft ?? 0) > 0
@@ -72,6 +81,7 @@ export function computeAttackDamage(ctx: DamageContext, baseDmg: number): { dmg:
   let dmg = baseDmg;
 
   dmg = Math.round(dmg * (actor.powMult || 1));
+  if (actor.wandDmgBonus && actor.wandDmgBonus.el === actor.el) dmg = Math.round(dmg * (1 + actor.wandDmgBonus.pct));
   if (actor.dmgUpRound) dmg = Math.round(dmg * (1 + actor.dmgUpRound));
   if (actor.execBonus && target.hp / target.maxHp < 0.5) dmg = Math.round(dmg * (1 + actor.execBonus));
 
@@ -108,6 +118,7 @@ export function computeAttackDamage(ctx: DamageContext, baseDmg: number): { dmg:
 
   const matchupResult = actor.forceFavoredRound ? 'favored' : matchup(actor.el, target.el);
   dmg = Math.round(dmg * elementCounterMult(matchupResult, target.elementLevel, target.elementResistLevel));
+  if (target.resist?.[actor.el]) dmg = Math.round(dmg * (1 - target.resist[actor.el]!));
 
   let critChance = actor.crit ?? 0.1;
   critChance += eff.critChanceThisHit ?? 0;
@@ -168,7 +179,7 @@ export function applyOnHitRiders(
     target.burn = { dmg: tickDmg, ticksLeft: eff.burnTicks ?? DEFAULT_BURN_TICKS };
     events.push({ type: 'buffApplied', targetId: target.id, statusKind: 'burning' });
   }
-  if (eff.freezeChance && Math.random() < eff.freezeChance) {
+  if (eff.freezeChance && Math.random() < eff.freezeChance && canBeFrozen(target)) {
     target.frozen = true;
     events.push({ type: 'buffApplied', targetId: target.id, statusKind: 'frozen' });
   }
@@ -355,7 +366,7 @@ export function applyBuffCard(
     if (!h.alive) return;
     const dodgeChance = Math.max(0, Math.min(0.75, (h.dodge || 0) + (h.dodgeUpRound || 0) + (h.dodgeBuffExtra || 0)));
     if (Math.random() < dodgeChance) return;
-    if (Math.random() < eff.freezeAllChance!) { h.frozen = true; events.push({ type: 'buffApplied', targetId: h.id, statusKind: 'frozen' }); }
+    if (Math.random() < eff.freezeAllChance! && canBeFrozen(h)) { h.frozen = true; events.push({ type: 'buffApplied', targetId: h.id, statusKind: 'frozen' }); }
   });
 
   return events;

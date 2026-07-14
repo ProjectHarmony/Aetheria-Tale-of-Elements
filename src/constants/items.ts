@@ -1,6 +1,6 @@
 import type { GearSlot, ItemDef } from '@/types';
 import { MONSTER_LOOT_ITEMS } from './monsterLoot';
-import { MONSTER_CARD_ITEMS, MONSTER_CRIMSON_ITEMS, MONSTER_EQUIPMENT_ITEMS } from './monsterGear';
+import { MONSTER_CARD_ITEMS, MONSTER_CRIMSON_ITEMS, MONSTER_EQUIPMENT_ITEMS, MONSTER_UNID_EQUIPMENT_ITEMS } from './monsterGear';
 
 /**
  * Hand-authored starter item catalog — a small set per category so the
@@ -91,6 +91,13 @@ const HAND_ITEMS: Record<string, ItemDef> = {
     teleportHub: true, buyPrice: 20, desc: 'Warps you straight back to Crown Haven City from anywhere in the field. 💰20 Aeons.',
   },
 
+  // ---- Consumable (utility — reveals an Unidentified Equipment drop) ----
+  identify_scroll: {
+    id: 'identify_scroll', name: 'Identify Scroll', icon: '🔍', category: 'consumable', maxStack: 20,
+    isIdentifyScroll: true, buyPrice: 25,
+    desc: 'Reveals an Unidentified piece of Equipment — its real stats, and any elemental resistance or Wand affinity it rolled, stay hidden until you do. 💰25 Aeons.',
+  },
+
   // ---- Etc (quest/junk loot — no mechanical effect, sellable at Crown Haven's shop) ----
   tattered_map_fragment: {
     id: 'tattered_map_fragment', name: 'Tattered Map Fragment', icon: '📜', category: 'loot', maxStack: 99,
@@ -108,12 +115,13 @@ export const ITEMS_BY_ID: Record<string, ItemDef> = {
   ...HAND_ITEMS,
   ...MONSTER_LOOT_ITEMS,
   ...MONSTER_EQUIPMENT_ITEMS,
+  ...MONSTER_UNID_EQUIPMENT_ITEMS,
   ...MONSTER_CARD_ITEMS,
   ...MONSTER_CRIMSON_ITEMS,
 };
 
 /** Purchasable at Crown Haven City's shop, in listed order. */
-export const SHOP_BUY_ITEMS: string[] = ['minor_healing_draught', 'healing_draught', 'town_portal_scroll'];
+export const SHOP_BUY_ITEMS: string[] = ['minor_healing_draught', 'healing_draught', 'town_portal_scroll', 'identify_scroll'];
 
 export function itemById(id: string): ItemDef | undefined {
   return ITEMS_BY_ID[id];
@@ -138,6 +146,7 @@ export const STARTER_INVENTORY: Record<string, number> = {
   minor_healing_draught: 3,
   healing_draught: 1,
   town_portal_scroll: 1,
+  identify_scroll: 2,
   tattered_map_fragment: 1,
 };
 

@@ -21,6 +21,7 @@ export function BattlePage() {
   const syncPartyHp = useGameStore((s) => s.syncPartyHp);
   const activeEncounter = useMapStore((s) => s.activeEncounter);
   const resolveEncounter = useMapStore((s) => s.resolveEncounter);
+  const warpToHub = useMapStore((s) => s.warpToHub);
   const navigate = useNavigate();
   const xpGrantedRef = useRef(false);
   const xpRewardRef = useRef(60);
@@ -56,6 +57,14 @@ export function BattlePage() {
 
   const won = battle?.phase === 'ended' && battle.winner === 'players';
   const ended = battle?.phase === 'ended';
+  // A mutual KO (the last enemy dies the same round as your own last mage)
+  // still credits `winner: 'players'` (see resolve.ts's endRound), but with
+  // every player Hero at 0 HP that's not a "stay in the field, keep your
+  // banged-up HP" win in any real sense — it's a wipe that happens to also
+  // kill the last enemy. Treat it exactly like a loss for HP/hub purposes
+  // (mercy-revive to 1, warp to Crown Haven) while still crediting the
+  // win's loot/XP/respawn-timer below, since the kill genuinely happened.
+  const partyWiped = !!battle && ended && battle.players.every((h) => !h.alive);
 
   // Pokemon-style HP: persists whatever each mage ended the fight with
   // (including 0, if they got knocked out but the party still won) instead
@@ -73,7 +82,7 @@ export function BattlePage() {
   useEffect(() => {
     if (!ended || battleContext !== 'adventure' || !battle || hpSyncedRef.current) return;
     hpSyncedRef.current = true;
-    if (won) {
+    if (won && !partyWiped) {
       const hpByEl: Partial<Record<Element, number>> = {};
       battle.players.forEach((h) => { hpByEl[h.el] = h.hp; });
       syncPartyHp(hpByEl);
@@ -105,19 +114,25 @@ export function BattlePage() {
 
   // Feeds the outcome back to the map: a win starts the defeated roamer's
   // respawn cooldown (or marks the MVP world-singleton dead); a loss leaves
-  // it untouched so the fight can be retried immediately.
+  // it untouched so the fight can be retried immediately. `resolveEncounter`
+  // itself only warps to the hub on its own `!won` branch, so a mutual-KO
+  // wipe (won === true, but partyWiped) needs that warp forced explicitly —
+  // otherwise a "win" that killed your whole party would leave you stranded
+  // wherever you fell instead of sent back to regroup.
   useEffect(() => {
     if (!ended || battleContext !== 'adventure' || encounterResolvedRef.current) return;
     encounterResolvedRef.current = true;
     resolveEncounter(!!won);
+    if (partyWiped) warpToHub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ended, battleContext]);
 
-  // A loss sends you back to the hub to regroup (heal up, respec, swap
-  // formation) rather than dropping you right back on the map — walking
-  // straight back into the same roamer that just beat you isn't a "continue
-  // exploring" moment. A win keeps the original "stay in the field" flow.
-  const adventureWon = battleContext === 'adventure' && won;
+  // A loss (or a mutual-KO wipe) sends you back to the hub to regroup (heal
+  // up, respec, swap formation) rather than dropping you right back on the
+  // map — walking straight back into the same roamer that just beat you
+  // isn't a "continue exploring" moment. A clean win keeps the original
+  // "stay in the field" flow.
+  const adventureWon = battleContext === 'adventure' && won && !partyWiped;
   const restartLabel =
     battleContext === 'pvp' ? '🏠 Return to Hub' : adventureWon ? '🗺️ Continue Exploring' : battleContext === 'adventure' ? '🏠 Return to Hub' : '🔄 New Battle';
 

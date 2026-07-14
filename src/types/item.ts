@@ -1,3 +1,5 @@
+import type { Element } from './element';
+
 /** The 5 backpack classifications the player asked for. */
 export type ItemCategory = 'consumable' | 'equipment' | 'loot' | 'soul' | 'card';
 
@@ -44,18 +46,48 @@ export interface ItemDef {
    *  City when used from the overworld (a "Town Portal Scroll"). Not usable
    *  mid-battle — retreating out of a fight isn't implemented. */
   teleportHub?: boolean;
+  /** Consumable only — reveals an Unidentified Equipment item (see
+   *  `identified`/`identifiesInto`), turning it into its real, statted item. */
+  isIdentifyScroll?: boolean;
   /** Aeons price at Crown Haven City's shop — undefined = not purchasable. */
   buyPrice?: number;
   /** Aeons the shop pays to buy this off the player — undefined = not sellable. */
   sellPrice?: number;
-  /** Minimum mage Level required to equip/socket this — undefined = no restriction. */
-  reqLevel?: number;
-  /** Equipment only — rare monster drops (Mini-Boss+) can add a flat bonus
-   *  to every skill the mage has ALREADY invested at least 1 point in
-   *  (active or passive), capped at that skill's own max rank. Never
-   *  unlocks a skill from scratch, only amplifies a choice the player
-   *  already made — the "slightly off-balance if you got lucky" perk. */
-  bonusSkillRanks?: number;
+  /** Informational only — the monster Level this piece/card dropped from.
+   *  No longer gates equipping/socketing (see the "retract level cap" ask);
+   *  just shown as a reference tag in the UI. */
+  itemLevel?: number;
+  /** Equipment only, default true. False = drops as "Unidentified" with its
+   *  real slot/stats/name hidden — can't be equipped until an Identify
+   *  Scroll is used on it (see gameStore.identifyItem), which consumes this
+   *  item + one scroll and grants `identifiesInto` instead. This is where
+   *  the resistance-roll "chance" the player asked for actually happens —
+   *  the identified item's stats are fixed per catalog entry (this whole
+   *  item system is a static catalog, not per-drop-instance RNG), but the
+   *  player doesn't know what they rolled until they identify it. */
+  identified?: boolean;
+  /** Unidentified-equipment only — the real item id an Identify Scroll turns this into. */
+  identifiesInto?: string;
+  /** Equipment only — % less damage taken from that element's attacks (from
+   *  up to 3 rolls at generation time, can repeat the same element to stack
+   *  it further). Head/Robe/Cape/Accessories only, never Wands. */
+  elementResist?: Partial<Record<Element, number>>;
+  /** Wand only — a random element's outgoing damage %, so a wand can land on
+   *  a mage's own element (a jackpot roll) or a mismatched one (a dud) —
+   *  balanced by rolling a modest range regardless of which element it hits. */
+  wandElementDmgPct?: { el: Element; pct: number };
+  /** Accessory only — both members of a matched pair share the same setId;
+   *  wearing both at once (acc1 + acc2) grants `setBonus` on top of their
+   *  individual statBonus. Undefined = a standalone accessory with no pairing. */
+  setId?: string;
+  setBonus?: ItemStatBonus;
+  /** Shown in the UI when both accessories of a set are worn. */
+  setBonusDesc?: string;
+  /** Equipment only — +1/+2/+3 rank to every skill of ONE element the mage
+   *  has already invested at least 1 point in (active or passive), capped at
+   *  that skill's own max rank — replaces the old element-agnostic
+   *  `bonusSkillRanks`. Only ever benefits a mage of the MATCHING element. */
+  elementSkillRankBonus?: { el: Element; ranks: number };
   /** Presentational drop-tier — see ItemRarity. */
   rarity?: ItemRarity;
 }

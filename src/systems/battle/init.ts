@@ -18,6 +18,7 @@ export function createInitialBattleState(players: Hero[], enemies: Hero[], runti
     pendingCardId: null,
     plans: {},
     heroDone: {},
+    lockedThisRound: {},
     planningTimeLeft: 30,
     enemyActionsRemaining: 0,
     log: 'Plan your scrolls.',

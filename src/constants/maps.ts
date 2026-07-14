@@ -165,15 +165,28 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+/** Outer/frontier maps (far from Crown Haven City by hop-distance) carry
+ *  noticeably fewer roamers than the inner ring — density falls off instead
+ *  of staying flat all the way to the map edge, so the far frontier reads as
+ *  sparser/lonelier rather than just "the same crowd but stronger." */
+function densityScaleForLayer(layer: number): number {
+  if (layer >= 8) return 0.45;
+  if (layer >= 6) return 0.65;
+  return 1;
+}
+
 /** Scatters `count` individuals of one species/tier independently across the
  *  whole map (each instance gets its own seeded-random point, not a shared
  *  nest/cluster point) so a species' population reads as roaming the whole
- *  zone rather than a single tight den. */
-function scatterOnMap(map: MapDef, name: string, count: number): void {
+ *  zone rather than a single tight den. `companionsFor`, if given, is
+ *  consulted per-instance for a (usually empty) battle-only companion list —
+ *  see MonsterSlot's 4th element. */
+function scatterOnMap(map: MapDef, name: string, count: number, companionsFor?: (n: number) => string[] | undefined): void {
   for (let n = 0; n < count; n++) {
     const x = clamp(map.w / 2 + seededUnit(name + 'x' + n) * map.w * 0.47, 16, map.w - 16);
     const y = clamp(map.h / 2 + seededUnit(name + 'y' + n) * map.h * 0.47, 16, map.h - 16);
-    map.monsters.push([name, x, y]);
+    const companions = companionsFor?.(n);
+    map.monsters.push(companions && companions.length > 0 ? [name, x, y, companions] : [name, x, y]);
   }
 }
 
@@ -192,20 +205,56 @@ function scatterOnMap(map: MapDef, name: string, count: number): void {
     .filter((m) => m.subtype === 'Field' && m.tier !== 'boss' && !POPULATION_SUFFIXES.some((sfx) => m.name.endsWith(sfx)))
     .sort((a, b) => a.level - b.level);
 
+  // A deliberately sparse minority of higher-level species get ONE lower-
+  // level "underling" companion pulled from early in the (level-sorted)
+  // roster — a stronger monster occasionally showing up with a much weaker
+  // one in tow, never the norm (see the "so be careful" ask this mirrors).
+  // Gated to species in the upper third of the roster by level, and rolled
+  // per-species (not per-instance) so it's an occasional flavor, not a rule.
+  const underlingPool = baseFieldMonsters.filter((m) => m.tier === 'regular').slice(0, Math.ceil(baseFieldMonsters.length * 0.2));
+  function underlingFor(entry: (typeof baseFieldMonsters)[number], i: number): string[] | undefined {
+    if (!underlingPool.length) return undefined;
+    const highLevelStart = Math.floor(baseFieldMonsters.length * 0.7);
+    if (i < highLevelStart) return undefined;
+    if (seededUnit(entry.name + '::underling-chance') > -0.7) return undefined; // ~15% of eligible species
+    const pick = underlingPool[Math.floor(((seededUnit(entry.name + '::underling-pick') + 1) / 2) * underlingPool.length)];
+    return pick && pick.name !== entry.name ? [pick.name] : undefined;
+  }
+
   baseFieldMonsters.forEach((entry, i) => {
     const mapIndex = Math.min(fieldMapIds.length - 1, Math.floor((i * fieldMapIds.length) / baseFieldMonsters.length));
     const mapId = fieldMapIds[mapIndex];
     const map = mapId ? MAPS[mapId] : undefined;
     if (!map) return;
+    const density = densityScaleForLayer(mapLayers[mapId!] ?? 0);
+    const scaledCount = (base: number) => Math.max(1, Math.round(base * density));
 
     if (entry.tier !== 'regular') {
-      scatterOnMap(map, entry.name, FIELD_INSTANCES_PER_SPECIES);
+      // Elite/wild-Mini-Boss species: each of the (density-scaled) instances
+      // independently has a ~35% chance of spawning as a small same-species
+      // pack of 2 instead of solo — "some regular/elite have only 1 monster,
+      // adjust some" — plus the sparse cross-species underling roll above.
+      scatterOnMap(map, entry.name, scaledCount(FIELD_INSTANCES_PER_SPECIES), (n) => {
+        const underling = underlingFor(entry, i);
+        if (underling) return underling;
+        if (entry.tier === 'elite' && seededUnit(entry.name + '::pack' + n) > 0.3) return [entry.name];
+        return undefined;
+      });
       return;
     }
 
-    scatterOnMap(map, entry.name, POPULATION_COUNTS[''] ?? 12);
+    // Regular species: Juveniles spawn plain; a minority of Adult instances
+    // (~20%) get a same-species companion so "only ever 1 monster" isn't
+    // universal for Adults either.
+    scatterOnMap(map, entry.name, scaledCount(POPULATION_COUNTS[''] ?? 12));
     const adult = MONSTER_ROSTER_BY_NAME[entry.name + ' (Adult)'];
-    if (adult) scatterOnMap(map, adult.name, POPULATION_COUNTS[' (Adult)'] ?? 5);
+    if (adult) {
+      scatterOnMap(map, adult.name, scaledCount(POPULATION_COUNTS[' (Adult)'] ?? 5), (n) => {
+        const underling = underlingFor(entry, i);
+        if (underling) return underling;
+        return seededUnit(adult.name + '::pack' + n) > 0.6 ? [adult.name] : undefined;
+      });
+    }
 
     const elder = MONSTER_ROSTER_BY_NAME[entry.name + ' (Elder)'];
     const spawnsElder = seededUnit(entry.name + '::elder-chance') < -0.1; // ~45% of species spawn an Elder anywhere at all
@@ -215,7 +264,7 @@ function scatterOnMap(map: MapDef, name: string, count: number): void {
       const elderMapIndex = Math.max(0, Math.min(fieldMapIds.length - 1, mapIndex + offset));
       const elderMapId = fieldMapIds[elderMapIndex];
       const elderMap = elderMapId ? MAPS[elderMapId] : undefined;
-      if (elderMap) scatterOnMap(elderMap, elder.name, POPULATION_COUNTS[' (Elder)'] ?? 1);
+      if (elderMap) scatterOnMap(elderMap, elder.name, scaledCount(POPULATION_COUNTS[' (Elder)'] ?? 1));
     }
   });
 }

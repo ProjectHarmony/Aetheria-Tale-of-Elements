@@ -175,5 +175,13 @@ MONSTER_ROSTER.forEach((entry) => {
 });
 
 /** Merged registry `resolve.ts` looks skills up in — player skills (rank-scaled,
- *  shared per element) + monster skills (rank-fixed at 1, baked per monster). */
-export const ALL_SKILLS_BY_ID: Record<string, Skill> = { ...SKILLS_BY_ID, ...MONSTER_SKILLS_BY_ID };
+ *  shared per element) + monster skills (rank-fixed at 1, baked per monster).
+ *  A live Proxy, not a one-time spread: PvP/demo battles register their generic
+ *  "Strike" skill into MONSTER_SKILLS_BY_ID at battle-build time, which is AFTER
+ *  this module finishes loading — a static `{ ...SKILLS_BY_ID, ...MONSTER_SKILLS_BY_ID }`
+ *  snapshot would permanently miss those entries, making every generic enemy's
+ *  attack silently resolve as a no-damage buff (resolve.ts's dealsDirectDamage
+ *  check comes up empty for an id the snapshot never saw). */
+export const ALL_SKILLS_BY_ID: Record<string, Skill> = new Proxy({} as Record<string, Skill>, {
+  get: (_target, prop: string) => SKILLS_BY_ID[prop] ?? MONSTER_SKILLS_BY_ID[prop],
+});

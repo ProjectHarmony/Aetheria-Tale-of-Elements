@@ -13,8 +13,13 @@ export interface PortalDef {
   connectionType?: string;
 }
 
-/** [monsterName, spawnX, spawnY] — mirrors the original's tuple-array shape. */
-export type MonsterSlot = [string, number, number];
+/** [monsterName, spawnX, spawnY, companions?] — mirrors the original's
+ *  tuple-array shape, plus an optional 4th slot for battle-only companions
+ *  (a small pack sharing the same species, or a stronger monster's lower-
+ *  level underling) that join the fight but never roam the map on their
+ *  own — same pattern as a Boss's 2 Underlings, just for regular/elite field
+ *  monsters, and only for a deliberately sparse minority of slots. */
+export type MonsterSlot = [string, number, number, string[]?];
 
 /** [itemId, x, y] — reserved for the follow-up item-placement data drop, mirrors MonsterSlot. */
 export type ItemSlot = [string, number, number];
@@ -64,6 +69,9 @@ export interface Roamer {
   x: number;
   y: number;
   aggro: boolean;
+  /** Battle-only companions (see MonsterSlot) — pulled into the encounter
+   *  alongside this roamer, with no map presence of their own. */
+  companions?: string[];
 }
 
 export interface MvpState {

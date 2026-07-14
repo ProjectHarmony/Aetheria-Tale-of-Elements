@@ -110,28 +110,22 @@ export function GearSlotSheet({ slot, el, mage, onClose }: GearSlotSheetProps) {
               <div className="py-4 text-center text-[11px] text-white/40">No {meta.name.toLowerCase()} in your Backpack.</div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {equipOptions.map(({ def, qty }) => {
-                  const locked = mage.level < (def.reqLevel ?? 0);
-                  return (
-                    <button
-                      key={def.id}
-                      onClick={() => !locked && equipItem(el, def.id)}
-                      disabled={locked}
-                      className="flex items-center gap-3 rounded-xl border border-white/12 bg-white/5 p-2.5 text-left disabled:opacity-45"
-                    >
-                      <span className="text-2xl">{def.icon}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-['Baloo_2'] text-[12px] font-bold" style={{ color: def.rarity ? RARITY_COLOR[def.rarity] : '#fff8f0' }}>
-                          {def.name} <span className="text-white/40">×{qty}</span>
-                        </div>
-                        <div className="text-[10px] text-white/50">{def.desc}</div>
+                {equipOptions.map(({ def, qty }) => (
+                  <button
+                    key={def.id}
+                    onClick={() => equipItem(el, def.id)}
+                    className="flex items-center gap-3 rounded-xl border border-white/12 bg-white/5 p-2.5 text-left"
+                  >
+                    <span className="text-2xl">{def.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-['Baloo_2'] text-[12px] font-bold" style={{ color: def.rarity ? RARITY_COLOR[def.rarity] : '#fff8f0' }}>
+                        {def.name} <span className="text-white/40">×{qty}</span>
                       </div>
-                      <span className={`flex-shrink-0 font-['Baloo_2'] text-[10.5px] font-extrabold ${locked ? 'text-white/40' : 'text-[var(--color-gold)]'}`}>
-                        {locked ? `🔒 Lv ${def.reqLevel}` : 'Equip'}
-                      </span>
-                    </button>
-                  );
-                })}
+                      <div className="text-[10px] text-white/50">{def.desc}</div>
+                    </div>
+                    <span className="flex-shrink-0 font-['Baloo_2'] text-[10.5px] font-extrabold text-[var(--color-gold)]">Equip</span>
+                  </button>
+                ))}
               </div>
             )}
           </motion.div>

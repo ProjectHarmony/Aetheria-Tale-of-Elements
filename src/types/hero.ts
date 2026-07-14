@@ -1,4 +1,5 @@
 import type { Element, Row } from './element';
+import type { MonsterTier } from './map';
 import type { Card } from './skill';
 
 /**
@@ -68,6 +69,21 @@ export interface Hero {
    *  are always Lv2/Lv2 (nets to the original flat 1.2x/0.8x); monsters vary by Role. */
   elementLevel?: number;
   elementResistLevel?: number;
+  /** Player-only: summed elemental resistance % from identified equipment
+   *  (gearElementResist) — cuts incoming damage from that element's
+   *  attackers on top of the normal matchup multiplier. Absent on enemies
+   *  (monsters don't wear gear). */
+  resist?: Partial<Record<Element, number>>;
+  /** Player-only: the equipped Wand's rolled element-damage% (gearWandElementDmg)
+   *  — boosts this hero's own outgoing damage when THEY cast a skill of the
+   *  matching element (always true for a mage's own-element skills, so this
+   *  only matters if the Wand's roll happens to match this mage's element). */
+  wandDmgBonus?: { el: Element; pct: number };
+  /** Enemy-only: Aetheria Database Tier — Bosses are fully immune to Freeze,
+   *  Mini-Bosses resist it 50% of the time (see applyOnHitRiders/applyBuffCard
+   *  in combat.ts). Absent on players and on non-roster (PvP/demo) enemies,
+   *  both of which freeze normally. */
+  tier?: MonsterTier;
 
   /** Independent per-hero energy pool — every mage (and every monster) has
    *  their own, spent on their own casts and regenerating on their own each

@@ -7,9 +7,14 @@ const PORTAL_RADIUS = 38;
 const AMBIENT_DRIFT_RANGE = 50;
 
 /** Detection radius + chase-speed multiplier by tier, for aggressive roamers.
- *  Regular never chases (ambient drift only, gated by `aggro` below anyway). */
+ *  Kept well under 1.0 across the board — an aggressive roamer that matches
+ *  or beats the player's own speed can never be outwalked once spotted,
+ *  which reads as relentless/unfair rather than "a real threat you can
+ *  choose to run from." Higher tiers are still scarier (faster relative
+ *  chase), but none of them can actually catch a player who commits to
+ *  fleeing in a straight line. */
 const AGGRO_RADIUS: Record<MonsterTier, number> = { regular: 220, elite: 260, miniboss: 320, boss: 420 };
-const AGGRO_MULT: Record<MonsterTier, number> = { regular: 1.0, elite: 1.0, miniboss: 1.04, boss: 1.08 };
+const AGGRO_MULT: Record<MonsterTier, number> = { regular: 0.5, elite: 0.55, miniboss: 0.65, boss: 0.75 };
 
 export function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -59,7 +64,7 @@ export function resolveRoamers(
   now = Date.now(),
 ): Roamer[] {
   const out: Roamer[] = [];
-  map.monsters.forEach(([name, x, y], slot) => {
+  map.monsters.forEach(([name, x, y, companions], slot) => {
     const meta: MonsterMeta | undefined = MONSTER_META[name];
     if (!meta) return;
     let pos: Vec2 = { x, y };
@@ -76,7 +81,7 @@ export function resolveRoamers(
         pos = randomMapPosition(map);
       }
     }
-    out.push({ id: `${map.id}-${slot}`, slot, name, meta, x: pos.x, y: pos.y, aggro: meta.aggressive });
+    out.push({ id: `${map.id}-${slot}`, slot, name, meta, x: pos.x, y: pos.y, aggro: meta.aggressive, companions });
   });
   return out;
 }

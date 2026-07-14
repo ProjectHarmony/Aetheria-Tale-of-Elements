@@ -42,6 +42,9 @@ interface GameStore {
   unequipItem: (el: Element, slot: GearSlot) => void;
   socketItem: (el: Element, slot: GearSlot, itemId: string) => boolean;
   unsocketItem: (el: Element, slot: GearSlot, socketedItemId: string) => void;
+  /** Consumes one Identify Scroll + one Unidentified equipment item, granting
+   *  the real (identified) item it was hiding — see ItemDef.identified/identifiesInto. */
+  identifyItem: (unidItemId: string) => boolean;
 
   /** Crown Haven City's shop — Buy spends Aeons for a purchasable item (see
    *  SHOP_BUY_ITEMS/ItemDef.buyPrice); Sell pays Aeons for a Loot item (see
@@ -218,7 +221,7 @@ export const useGameStore = create<GameStore>()(
         const def = ITEMS_BY_ID[itemId];
         if (!party || !mage || !def || def.category !== 'equipment' || !def.slot) return false;
         if ((inventory[itemId] ?? 0) <= 0) return false;
-        if (mage.level < (def.reqLevel ?? 0)) return false;
+        if (def.identified === false) return false; // must be identified first — see identifyItem
 
         const slot = def.slot;
         const previous = mage.gear[slot];
@@ -264,7 +267,6 @@ export const useGameStore = create<GameStore>()(
         const validPairing = (def.category === 'card' && CARD_SOCKET_SLOTS.includes(slot)) || (def.category === 'soul' && slot === SOUL_SOCKET_SLOT);
         if (!validPairing) return false;
         if ((inventory[itemId] ?? 0) <= 0) return false;
-        if (mage.level < (def.reqLevel ?? 0)) return false;
 
         const nextInventory = { ...inventory };
         nextInventory[itemId] = (nextInventory[itemId] ?? 0) - 1;
@@ -290,6 +292,23 @@ export const useGameStore = create<GameStore>()(
           inventory: { ...inventory, [socketedItemId]: (inventory[socketedItemId] ?? 0) + 1 },
           party: { ...party, mages: { ...party.mages, [el]: { ...mage, gear: { ...mage.gear, [slot]: { ...worn, socketedIds: newSocketed } } } } },
         });
+      },
+
+      identifyItem: (unidItemId) => {
+        const { inventory } = get();
+        const unidDef = ITEMS_BY_ID[unidItemId];
+        if (!unidDef || unidDef.identified !== false || !unidDef.identifiesInto) return false;
+        if ((inventory[unidItemId] ?? 0) <= 0) return false;
+        if ((inventory.identify_scroll ?? 0) <= 0) return false;
+
+        const nextInventory = { ...inventory };
+        nextInventory[unidItemId] = (nextInventory[unidItemId] ?? 0) - 1;
+        if (nextInventory[unidItemId]! <= 0) delete nextInventory[unidItemId];
+        nextInventory.identify_scroll = (nextInventory.identify_scroll ?? 0) - 1;
+        if (nextInventory.identify_scroll! <= 0) delete nextInventory.identify_scroll;
+        nextInventory[unidDef.identifiesInto] = (nextInventory[unidDef.identifiesInto] ?? 0) + 1;
+        set({ inventory: nextInventory });
+        return true;
       },
 
       addAeons: (amount) => set((s) => ({ aeons: Math.max(0, s.aeons + amount) })),

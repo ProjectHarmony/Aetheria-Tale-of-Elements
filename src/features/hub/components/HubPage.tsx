@@ -50,7 +50,7 @@ export function HubPage() {
       <div className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 backdrop-blur-md">
         <div>
           <div className="font-['Baloo_2'] text-xl font-extrabold text-[#fff8f0]" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>{user}</div>
-          <div className="text-[10px] font-bold uppercase tracking-wide text-white/70">Realm of Caelyra</div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-white/70">Realm of Aetheria</div>
         </div>
         <div className="flex gap-1.5">
           <button
@@ -96,7 +96,7 @@ export function HubPage() {
 
       <div className="flex flex-1 flex-col gap-3">
         <HubOption icon="🧙" name="Manage Party" desc="Change mages, skill loadouts & formation" onClick={() => navigate('/party')} />
-        <HubOption icon="🗺️" name="Adventure" desc="Explore Caelyra — fight monsters roaming the wilds" onClick={() => navigate('/map')} />
+        <HubOption icon="🗺️" name="Adventure" desc="Explore Aetheria — fight monsters roaming the wilds" onClick={() => navigate('/map')} />
         <HubOption
           icon="⚔️"
           name="PVP Battle"

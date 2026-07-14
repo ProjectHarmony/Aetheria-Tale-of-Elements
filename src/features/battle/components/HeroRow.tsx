@@ -49,8 +49,11 @@ export const HeroRow = forwardRef<HTMLDivElement, HeroRowProps>(function HeroRow
         if (side === 'player') {
           const plan = battle.plans[hero.id];
           const isDone = !!battle.heroDone[hero.id];
-          canUndo = battle.phase === 'planning' && hero.alive;
-          if (isDone && (!Array.isArray(plan) || plan.length === 0)) {
+          const locked = !!battle.lockedThisRound[hero.id];
+          canUndo = battle.phase === 'planning' && hero.alive && !locked;
+          if (isDone && locked) {
+            planLabel = 'Used item';
+          } else if (isDone && (!Array.isArray(plan) || plan.length === 0)) {
             isPass = true;
           } else if (Array.isArray(plan) && plan.length > 0) {
             const lastCard = cardById(battle, plan[plan.length - 1]!.cardId);

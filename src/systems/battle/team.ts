@@ -115,30 +115,72 @@ export function gearStatBonus(mage: MageState): Required<ItemStatBonus> {
     add(ITEMS_BY_ID[worn.itemId]?.statBonus);
     worn.socketedIds.forEach((id) => add(ITEMS_BY_ID[id]?.statBonus));
   });
+  add(gearAccessoryComboBonus(mage));
   return total;
 }
 
-/** Highest `bonusSkillRanks` across every worn/socketed piece (Mini-Boss+
- *  drops only) — flat, not additive across multiple pieces, so stacking
- *  several rare items can't compound into an ever-growing rank bonus; one
- *  generous "your best rare drop's" amplifier is already the intended
- *  off-balance perk. Never unlocks a skill from 0 (see PASSIVE_KEYS/actives
- *  callers below, both already gated on rank > 0). */
-export function gearSkillRankBonus(mage: MageState): number {
+/** Highest `elementSkillRankBonus` across every worn/socketed piece THAT
+ *  MATCHES the mage's own element (Elite+ drops only) — flat, not additive
+ *  across multiple pieces, so stacking several rare items can't compound
+ *  into an ever-growing rank bonus; one generous "your best rare drop's"
+ *  amplifier is already the intended off-balance perk. A Fire mage gets
+ *  nothing from a Water-flavored piece's rank bonus, even if it's otherwise
+ *  equippable (its statBonus/resist/etc. still apply normally). Never
+ *  unlocks a skill from 0 (see PASSIVE_KEYS/actives callers below, both
+ *  already gated on rank > 0). */
+export function gearElementSkillRankBonus(mage: MageState, el: Element): number {
   let best = 0;
+  const consider = (itemId: string) => {
+    const b = ITEMS_BY_ID[itemId]?.elementSkillRankBonus;
+    if (b && b.el === el) best = Math.max(best, b.ranks);
+  };
   (Object.keys(mage.gear ?? {}) as GearSlot[]).forEach((slot) => {
     const worn: EquippedGear | null = mage.gear?.[slot] ?? null;
     if (!worn) return;
-    best = Math.max(best, ITEMS_BY_ID[worn.itemId]?.bonusSkillRanks ?? 0);
-    worn.socketedIds.forEach((id) => { best = Math.max(best, ITEMS_BY_ID[id]?.bonusSkillRanks ?? 0); });
+    consider(worn.itemId);
+    worn.socketedIds.forEach(consider);
   });
   return best;
+}
+
+/** Sums every worn piece's `elementResist` rolls (repeats of the same
+ *  element across different pieces stack additively), capped at 75% per
+ *  element so a lucky identify streak can't reach near-immunity. Wands never
+ *  roll resist (see rollElementResist's isWand guard in monsterGear.ts), so
+ *  this only ever reads from Head/Robe/Cape/Accessories. */
+export function gearElementResist(mage: MageState): Partial<Record<Element, number>> {
+  const total: Partial<Record<Element, number>> = {};
+  (Object.keys(mage.gear ?? {}) as GearSlot[]).forEach((slot) => {
+    const worn: EquippedGear | null = mage.gear?.[slot] ?? null;
+    if (!worn) return;
+    const resist = ITEMS_BY_ID[worn.itemId]?.elementResist;
+    if (!resist) return;
+    (Object.keys(resist) as Element[]).forEach((el) => { total[el] = Math.min(0.75, (total[el] ?? 0) + resist[el]!); });
+  });
+  return total;
+}
+
+/** The equipped Weapon's rolled element-damage% (see rollWandElementDmg) —
+ *  undefined if no Wand worn, or the worn Wand didn't roll one. */
+export function gearWandElementDmg(mage: MageState): { el: Element; pct: number } | undefined {
+  const worn = mage.gear?.weapon;
+  return worn ? ITEMS_BY_ID[worn.itemId]?.wandElementDmgPct : undefined;
+}
+
+/** Both accessory slots' worn items sharing the same `setId` grants their
+ *  authored `setBonus` on top of their individual statBonus — undefined if
+ *  either accessory slot is empty, unpaired, or the two don't match. */
+export function gearAccessoryComboBonus(mage: MageState): ItemStatBonus | undefined {
+  const acc1 = mage.gear?.acc1 ? ITEMS_BY_ID[mage.gear.acc1.itemId] : undefined;
+  const acc2 = mage.gear?.acc2 ? ITEMS_BY_ID[mage.gear.acc2.itemId] : undefined;
+  if (!acc1?.setId || !acc2?.setId || acc1.setId !== acc2.setId) return undefined;
+  return acc1.setBonus;
 }
 
 export function derivedStatsFor(el: Element, mage: MageState): DerivedStats {
   const s = mage.stats;
   const gear = gearStatBonus(mage);
-  const rankBonus = gearSkillRankBonus(mage);
+  const rankBonus = gearElementSkillRankBonus(mage, el);
   const passiveSkills = SKILL_TREES[el].filter((k) => k.kind === 'passive' && (mage.ranks[k.id] || 0) > 0);
 
   const sum = (key: 'blockOnAttack' | 'execBonus' | 'reflect' | 'dmgReduction' | 'regen' | 'dodgeUp' | 'speedUp' | 'accUp' | 'maxHpUpPct' | PassiveKnobKey) =>
@@ -174,7 +216,7 @@ export function buildPlayerTeamFromParty(party: Party): { heroes: Hero[]; runtim
     const mage = party.mages[el];
     if (!mage) throw new Error(`Party is missing mage state for element "${el}"`);
     const d = derivedStatsFor(el, mage);
-    const rankBonus = gearSkillRankBonus(mage);
+    const rankBonus = gearElementSkillRankBonus(mage, el);
     const actives = equippedActives(mage, el);
     actives.forEach((s) => { runtimeCards[s.id] = skillToCard(s, Math.min(s.maxRank, skillRank(mage, s.id) + rankBonus), el); });
     const ult = SKILL_TREES[el].find((s) => s.kind === 'ultimate')!;
@@ -209,6 +251,8 @@ export function buildPlayerTeamFromParty(party: Party): { heroes: Hero[]; runtim
       acc: d.acc,
       elementLevel: PLAYER_ELEMENT_LEVEL,
       elementResistLevel: PLAYER_ELEMENT_RESIST_LEVEL,
+      resist: gearElementResist(mage),
+      wandDmgBonus: gearWandElementDmg(mage),
       blockOnAttack: d.blockOnAttack,
       execBonus: d.execBonus,
       reflect: d.reflect,
@@ -349,6 +393,7 @@ export function buildEncounterEnemyTeam(
       el: entry.element,
       row,
       level: entry.level,
+      tier: entry.tier,
       hp: stats.hp,
       maxHp: stats.hp,
       alive: true,

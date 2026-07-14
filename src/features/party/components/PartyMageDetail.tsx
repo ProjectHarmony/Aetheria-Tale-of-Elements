@@ -23,6 +23,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
   const inventory = useGameStore((s) => s.inventory);
   const applyMageDraft = useGameStore((s) => s.applyMageDraft);
   const setEquipped = useGameStore((s) => s.setEquipped);
+  const identifyItem = useGameStore((s) => s.identifyItem);
   const respec = useGameStore((s) => s.respec);
   const getRespecTokens = useGameStore((s) => s.getRespecTokens);
 
@@ -220,8 +221,10 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
       <ItemDetailModal
         item={detailItemId ? ITEMS_BY_ID[detailItemId] ?? null : null}
         qty={detailItemId ? inventory[detailItemId] ?? 0 : 0}
+        hasIdentifyScroll={(inventory.identify_scroll ?? 0) > 0}
         onClose={() => setDetailItemId(null)}
         onSocket={(itemId) => { setDetailItemId(null); setSocketItemId(itemId); }}
+        onIdentify={(itemId) => { identifyItem(itemId); }}
       />
     </div>
   );

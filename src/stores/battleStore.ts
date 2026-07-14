@@ -227,6 +227,11 @@ export const useBattleStore = create<BattleStore>((set, get) => {
       const healed = target.hp - before;
 
       gameStore.removeItem(itemId, 1);
+      // Irreversible the instant it happens (heal applied, item burned, no
+      // PlayerCast queued anywhere to undo) — lock the acting hero out of
+      // reopen/undo for the rest of this round so re-selecting them can't
+      // loop into using another item for free (see lockedThisRound's doc).
+      battle.lockedThisRound[actingHeroId] = true;
       assignPass(battle, actingHeroId);
       publish(battle, { type: 'heal', targetId: target.id, amount: healed });
       return true;
