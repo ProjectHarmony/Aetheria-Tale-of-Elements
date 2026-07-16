@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/stores/gameStore';
+import { getServerUrl, setServerUrl } from '@/net/socket';
+import { loginOverServer, registerOverServer } from '@/net/accountSync';
 
 type Mode = 'register' | 'login';
 
@@ -9,7 +11,10 @@ export function AuthPage() {
   const [mode, setMode] = useState<Mode>('register');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [serverUrl, setServerUrlField] = useState(() => getServerUrl());
+  const [showServerField, setShowServerField] = useState(() => !!getServerUrl());
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const register = useGameStore((s) => s.register);
   const login = useGameStore((s) => s.login);
   const navigate = useNavigate();
@@ -19,7 +24,34 @@ export function AuthPage() {
     setError('');
   }
 
-  function submit() {
+  async function submit() {
+    setError('');
+    setServerUrl(serverUrl);
+
+    // A Server URL means this account/save is shared across the test server
+    // (see the project's 5-person test-server plan) instead of this one
+    // browser's own localStorage — leave it blank for the original fully-
+    // local, single-device experience.
+    if (serverUrl.trim()) {
+      setBusy(true);
+      try {
+        if (mode === 'register') {
+          const res = await registerOverServer(username, password);
+          if (!res.ok) return setError(res.error);
+          navigate('/roster');
+        } else {
+          const res = await loginOverServer(username, password);
+          if (!res.ok) return setError(res.error);
+          navigate(res.hasParty ? '/hub' : '/roster');
+        }
+      } catch {
+        setError('Could not reach that server — check the URL and that it\'s running.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     if (mode === 'register') {
       const res = register(username, password);
       if (!res.ok) return setError(res.error);
@@ -83,6 +115,29 @@ export function AuthPage() {
           />
         </div>
 
+        <button
+          type="button"
+          onClick={() => setShowServerField((v) => !v)}
+          className="mb-2 w-full text-center text-[9px] font-bold uppercase tracking-wide text-white/40 underline decoration-dotted"
+        >
+          {showServerField ? 'Hide' : 'Playing on a friend\'s test server?'}
+        </button>
+        <AnimatePresence>
+          {showServerField && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-2.5 overflow-hidden">
+              <label className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-white/45">Server URL</label>
+              <input
+                value={serverUrl}
+                onChange={(e) => setServerUrlField(e.target.value)}
+                autoComplete="off"
+                placeholder="http://192.168.x.x:4000"
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-3.5 py-2.5 text-sm text-[#fff8f0] outline-none focus:border-[rgba(255,217,142,0.55)]"
+              />
+              <p className="mt-1 text-[8.5px] leading-snug text-white/35">Leave blank to play fully offline on this device, like normal. Paste the "Network" URL your host's server printed to share an account across devices.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {error && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-2 text-center text-[11px] font-semibold text-[var(--color-danger)]">
@@ -95,10 +150,11 @@ export function AuthPage() {
           whileTap={{ scale: 0.97 }}
           whileHover={{ scale: 1.02 }}
           onClick={submit}
-          className="animate-gradient mt-1 w-full rounded-[13px] py-3 font-['Baloo_2'] text-[13px] font-extrabold uppercase tracking-wide text-[var(--color-gold-deep)]"
+          disabled={busy}
+          className="animate-gradient mt-1 w-full rounded-[13px] py-3 font-['Baloo_2'] text-[13px] font-extrabold uppercase tracking-wide text-[var(--color-gold-deep)] disabled:opacity-60"
           style={{ background: 'linear-gradient(120deg, var(--color-fire), var(--color-gold), var(--color-water))' }}
         >
-          {mode === 'register' ? 'Create Account' : 'Log In'}
+          {busy ? 'Connecting…' : mode === 'register' ? 'Create Account' : 'Log In'}
         </motion.button>
 
         <p className="mt-3 text-center text-[9px] leading-relaxed text-white/35">

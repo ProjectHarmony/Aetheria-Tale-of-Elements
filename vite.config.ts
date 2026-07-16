@@ -48,5 +48,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Reachable from other devices on the same LAN, not just localhost — the
+    // other testers need to load the client itself, not just reach the
+    // socket server (see server/index.ts + the 5-person test-server plan).
+    host: true,
   },
 });

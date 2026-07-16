@@ -3,13 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useMapStore } from '@/stores/mapStore';
 import { useGameStore } from '@/stores/gameStore';
+import { useHubStore } from '@/stores/hubStore';
 import { HUB_MAP_ID, MAPS, mapAccentColor, mapBackground, mapIconFor } from '@/constants';
 import { useWheelPinchZoom } from '@/hooks/useWheelPinchZoom';
+import { joinHub, leaveHub, moveHub } from '@/net/hubSync';
 import { Joystick } from './Joystick';
 import { Minimap } from './Minimap';
 import { MinimapBadge } from './MinimapBadge';
 import { WorldMapModal } from './WorldMapModal';
 import { MapItemsSheet } from './MapItemsSheet';
+
+const HUB_MOVE_THROTTLE_MS = 200;
 
 const MIN_ZOOM = 0.8;
 const MAX_ZOOM = 1;
@@ -44,9 +48,13 @@ export function MapPage() {
   const restPulse = useMapStore((s) => s.restPulse);
   const toggleRest = useMapStore((s) => s.toggleRest);
   const setBattleContext = useGameStore((s) => s.setBattleContext);
+  const party = useGameStore((s) => s.party);
+  const otherPlayers = useHubStore((s) => s.otherPlayers);
   const navigate = useNavigate();
   const rafRef = useRef<number>(0);
   const heldDirs = useRef(new Set<string>());
+  const lastHubEmit = useRef({ t: 0, x: 0, y: 0 });
+  const elementPreview = party?.picks[0] ?? null;
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewSize, setViewSize] = useState({ w: 370, h: 780 });
   const [worldMapOpen, setWorldMapOpen] = useState(false);
@@ -135,11 +143,37 @@ export function MapPage() {
   useEffect(() => {
     function loop() {
       tick();
+      // Hub presence: throttled so this isn't a full-framerate socket emit —
+      // only fires while actually standing in Crown Haven City, and only on
+      // a real position change. Reads playerPos fresh off the store each
+      // frame rather than the destructured render value, which would be
+      // stale inside this effect's single long-lived rAF closure.
+      const state = useMapStore.getState();
+      if (state.mapId === HUB_MAP_ID) {
+        const now = performance.now();
+        const last = lastHubEmit.current;
+        if (now - last.t >= HUB_MOVE_THROTTLE_MS && (state.playerPos.x !== last.x || state.playerPos.y !== last.y)) {
+          lastHubEmit.current = { t: now, x: state.playerPos.x, y: state.playerPos.y };
+          moveHub(state.playerPos.x, state.playerPos.y, elementPreview);
+        }
+      }
       rafRef.current = requestAnimationFrame(loop);
     }
     rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
+
+  // Join/leave the hub-presence room whenever the current map crosses in or
+  // out of Crown Haven City — completely separate from field/Adventure
+  // roamer state, which this never touches.
+  useEffect(() => {
+    if (mapId === HUB_MAP_ID) {
+      joinHub(playerPos.x, playerPos.y, elementPreview);
+      return () => leaveHub();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapId]);
 
   useEffect(() => {
     if (pendingEncounter) {
@@ -207,6 +241,13 @@ export function MapPage() {
             <span className="text-[26px]" style={{ filter: r.aggro ? 'drop-shadow(0 0 6px rgba(255,84,112,0.7))' : 'drop-shadow(0 3px 4px rgba(0,0,0,0.35))' }}>
               {r.meta.icon}
             </span>
+          </div>
+        ))}
+
+        {mapId === HUB_MAP_ID && Object.values(otherPlayers).map((p) => (
+          <div key={p.userId} className="pointer-events-none absolute flex flex-col items-center" style={{ left: p.x - 16, top: p.y - 16 }}>
+            <span className="text-2xl" style={{ filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.4)) hue-rotate(60deg)' }}>🧙</span>
+            <div className="mt-0.5 whitespace-nowrap rounded-full bg-black/45 px-1.5 py-0.5 text-[7px] font-bold text-white/75">{p.userId}</div>
           </div>
         ))}
 
