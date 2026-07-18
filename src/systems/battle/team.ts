@@ -1,6 +1,5 @@
 import type { Card, Element, EquippedGear, GearSlot, Hero, HeroPassives, ItemStatBonus, MageState, Party, PassiveKnobKey, Skill } from '@/types';
 import {
-  AEON_TIER_REWARD,
   DEFAULT_STATS,
   ELEMENTS_ALL,
   HERO_ACC,
@@ -14,6 +13,7 @@ import {
   LEVEL_GAP_XP_BONUS_PER_LEVEL,
   MAX_ENERGY,
   MAX_EQUIPPED_ACTIVES,
+  MAX_MAGE_LEVEL,
   MONSTER_MOVESETS,
   MONSTER_ROSTER_BY_NAME,
   MONSTER_SKILLS_BY_ID,
@@ -58,6 +58,33 @@ export function newMageState(el: Element): MageState {
 
 export function skillRank(mage: MageState, skillId: string): number {
   return mage.ranks[skillId] || 0;
+}
+
+/** A preview-only Lv{MAX_MAGE_LEVEL} version of a freshly-created mage, used
+ *  purely to stage the tutorial's showcase battle (see TutorialPage) — every
+ *  skill in the element's tree is maxed out (so prereqs are trivially met)
+ *  and every earned stat point is spread evenly across the 6 stats, using
+ *  the same "level * points-per-level" total `respecMage` uses. This is
+ *  NEVER written to the real party/gameStore — the actual character stays
+ *  at Level 1 with its real (near-empty) skill ranks once the tutorial ends
+ *  and the player lands in Crown Haven. */
+export function buildTutorialShowcaseMage(el: Element): MageState {
+  const ranks: Record<string, number> = {};
+  SKILL_TREES[el].forEach((s) => { ranks[s.id] = s.maxRank; });
+  const totalStatPts = MAX_MAGE_LEVEL * STAT_POINTS_PER_LEVEL;
+  const bonusPerStat = Math.floor(totalStatPts / 6);
+  const stats = { ...DEFAULT_STATS };
+  (Object.keys(stats) as (keyof typeof stats)[]).forEach((k) => { stats[k] += bonusPerStat; });
+  return {
+    level: MAX_MAGE_LEVEL,
+    xp: 0,
+    statPoints: 0,
+    skillPoints: 0,
+    stats,
+    ranks,
+    equipped: null,
+    gear: { head: null, robe: null, cape: null, weapon: null, acc1: null, acc2: null },
+  };
 }
 
 /** Actives = attacks the mage has invested at least 1 point in and can put in their battle deck. */
@@ -231,7 +258,7 @@ export function buildPlayerTeamFromParty(party: Party): { heroes: Hero[]; runtim
 
     const hero: Hero = {
       id: 'p' + i,
-      name: HERO_NAMES[el],
+      name: party.characterName || HERO_NAMES[el],
       el,
       row: party.placements[el] ?? (i === 0 ? 'front' : 'back'),
       level: mage.level,
@@ -354,6 +381,29 @@ export function buildRandomEnemyTeam(avgPartyLevel: number): Hero[] {
   });
 }
 
+/** A single Training Dummy — the new-character tutorial battle's opponent
+ *  (see TutorialPage). Its attack stays low-damage so the fight can't
+ *  realistically be lost, but its HP is tuned high enough that the
+ *  Lv{MAX_MAGE_LEVEL} showcase mage (see buildTutorialShowcaseMage) takes a
+ *  real handful of rounds to bring it down instead of one-shotting it —
+ *  the whole point of the preview is to see several scrolls in action. */
+export function buildTutorialEncounter(): Hero[] {
+  const dmg = 25;
+  const card = genericEnemyCard(dmg);
+  card.el = 'earth';
+  const hp = 4000;
+  return [{
+    id: 'e0',
+    name: 'Training Dummy',
+    el: 'earth',
+    row: 'front',
+    hp,
+    maxHp: hp,
+    alive: true,
+    ...enemyBaseline('earth', { moveset: [card] }),
+  }];
+}
+
 /** XP reward per monster, by Tier. */
 const TIER_XP: Record<string, number> = { regular: 60, elite: 120, miniboss: 200, boss: 400 };
 
@@ -378,9 +428,9 @@ export function xpGapMultiplier(monsterLevel: number, partyLevel: number): numbe
 export function buildEncounterEnemyTeam(
   monsterNames: string[],
   partyLevel = 1,
-): { enemies: Hero[]; xpReward: number; aeonsReward: number; lootDrops: Record<string, number>; dmgScale: number } {
+): { enemies: Hero[]; xpReward: number; lootDrops: Record<string, number>; dmgScale: number } {
   const known = monsterNames.map((n) => MONSTER_ROSTER_BY_NAME[n]).filter((m): m is NonNullable<typeof m> => !!m);
-  if (known.length === 0) return { enemies: buildRandomEnemyTeam(1), xpReward: 60, aeonsReward: 8, lootDrops: {}, dmgScale: 1 };
+  if (known.length === 0) return { enemies: buildRandomEnemyTeam(1), xpReward: 60, lootDrops: {}, dmgScale: 1 };
 
   const threeUp = known.length === 3;
   const enemies: Hero[] = known.map((entry, i) => {
@@ -410,12 +460,11 @@ export function buildEncounterEnemyTeam(
   });
 
   const xpReward = known.reduce((sum, m) => sum + Math.round((TIER_XP[m.tier] ?? 60) * xpGapMultiplier(m.level, partyLevel)), 0);
-  const aeonsReward = known.reduce((sum, m) => sum + (AEON_TIER_REWARD[m.tier] ?? 8), 0);
   // Trophy loot (always rollable) plus the rarer Equipment/Card/Crimson-Card
   // rolls — merged into one bag since both just resolve to "stuff you found"
   // in the Victory summary/inventory, no separate plumbing needed downstream.
   const names = known.map((m) => m.name);
   const lootDrops: Record<string, number> = { ...rollMonsterLoot(names) };
   Object.entries(rollMonsterEquipmentDrops(names)).forEach(([id, qty]) => { lootDrops[id] = (lootDrops[id] ?? 0) + qty; });
-  return { enemies, xpReward, aeonsReward, lootDrops, dmgScale: 1 };
+  return { enemies, xpReward, lootDrops, dmgScale: 1 };
 }

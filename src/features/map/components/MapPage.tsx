@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useMapStore } from '@/stores/mapStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useHubStore } from '@/stores/hubStore';
+import { useChatStore, type ChatBubble as ChatBubbleData } from '@/stores/chatStore';
 import { HUB_MAP_ID, MAPS, mapAccentColor, mapBackground, mapIconFor } from '@/constants';
 import { useWheelPinchZoom } from '@/hooks/useWheelPinchZoom';
 import { joinHub, leaveHub, moveHub } from '@/net/hubSync';
@@ -29,6 +30,34 @@ function isTypingTarget(el: Element | null): boolean {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable);
 }
 
+/** Ragnarok-style speech balloon floating above a character's sprite — World
+ *  chat renders white, Party chat a pale green, matching the classic
+ *  public-vs-party color split. Parented by whichever sprite wrapper is
+ *  currently `relative`, so `bottom-full` stacks it just above the head
+ *  regardless of that wrapper's own absolute map position. */
+function ChatBubble({ bubble }: { bubble: ChatBubbleData }) {
+  const isParty = bubble.channel === 'party';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4, scale: 0.85 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -4, scale: 0.9 }}
+      transition={{ duration: 0.18 }}
+      className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 w-max max-w-[130px] -translate-x-1/2"
+    >
+      <div
+        className={`rounded-xl px-2.5 py-1.5 text-center text-[10px] font-semibold leading-snug shadow-[0_3px_10px_rgba(0,0,0,0.35)] ${
+          isParty ? 'bg-[#dff5e4] text-[#1c4a2a]' : 'bg-white text-[#241a30]'
+        }`}
+        style={{ overflowWrap: 'break-word' }}
+      >
+        {bubble.body}
+      </div>
+      <div className={`mx-auto h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent ${isParty ? 'border-t-[#dff5e4]' : 'border-t-white'}`} />
+    </motion.div>
+  );
+}
+
 export function MapPage() {
   const mapId = useMapStore((s) => s.mapId);
   const playerPos = useMapStore((s) => s.playerPos);
@@ -49,7 +78,9 @@ export function MapPage() {
   const toggleRest = useMapStore((s) => s.toggleRest);
   const setBattleContext = useGameStore((s) => s.setBattleContext);
   const party = useGameStore((s) => s.party);
+  const user = useGameStore((s) => s.user);
   const otherPlayers = useHubStore((s) => s.otherPlayers);
+  const bubbles = useChatStore((s) => s.bubbles);
   const navigate = useNavigate();
   const rafRef = useRef<number>(0);
   const heldDirs = useRef(new Set<string>());
@@ -246,12 +277,14 @@ export function MapPage() {
 
         {mapId === HUB_MAP_ID && Object.values(otherPlayers).map((p) => (
           <div key={p.userId} className="pointer-events-none absolute flex flex-col items-center" style={{ left: p.x - 16, top: p.y - 16 }}>
+            <AnimatePresence>{bubbles[p.userId] && <ChatBubble bubble={bubbles[p.userId]!} />}</AnimatePresence>
             <span className="text-2xl" style={{ filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.4)) hue-rotate(60deg)' }}>🧙</span>
             <div className="mt-0.5 whitespace-nowrap rounded-full bg-black/45 px-1.5 py-0.5 text-[7px] font-bold text-white/75">{p.userId}</div>
           </div>
         ))}
 
         <div className="absolute flex h-8 w-8 items-center justify-center text-2xl" style={{ left: playerPos.x - 16, top: playerPos.y - 16, filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.4))' }}>
+          <AnimatePresence>{user && bubbles[user] && <ChatBubble bubble={bubbles[user]!} />}</AnimatePresence>
           🧙
         </div>
 

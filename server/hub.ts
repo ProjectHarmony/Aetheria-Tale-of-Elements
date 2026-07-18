@@ -9,13 +9,17 @@ import { EVENTS, type HubMovePayload, type HubPlayer, type HubSnapshotPayload } 
  */
 const hubPlayers = new Map<string, HubPlayer>();
 
-export function registerHubHandlers(io: Server, socket: Socket, getUsername: () => string | null): void {
+export function registerHubHandlers(_io: Server, socket: Socket, getUsername: () => string | null): void {
   socket.on(EVENTS.HUB_JOIN, (payload: HubMovePayload) => {
     const userId = getUsername();
-    if (!userId) return;
+    if (!userId) {
+      console.log(`[hub] join event ignored — socket ${socket.id} has no authenticated username`);
+      return;
+    }
     socket.join('hub');
     hubPlayers.set(socket.id, { userId, x: payload.x, y: payload.y, elementPreview: payload.elementPreview });
     const snapshot: HubSnapshotPayload = { players: Array.from(hubPlayers.values()).filter((p) => p.userId !== userId) };
+    console.log(`[hub] "${userId}" joined — hub now has ${hubPlayers.size} player(s): ${Array.from(hubPlayers.values()).map((p) => p.userId).join(', ')}`);
     socket.emit(EVENTS.HUB_SNAPSHOT, snapshot);
     socket.to('hub').emit(EVENTS.HUB_PLAYER_MOVED, hubPlayers.get(socket.id));
   });

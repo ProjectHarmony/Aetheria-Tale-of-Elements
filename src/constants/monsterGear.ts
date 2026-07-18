@@ -95,6 +95,22 @@ const ELEMENT_SKILL_RANK_BONUS: Partial<Record<MonsterTier, number>> = { elite: 
 const RESIST_ROLLS: Record<MonsterTier, number> = { regular: 1, elite: 2, miniboss: 2, boss: 3 };
 const RESIST_PCT_PER_ROLL_CAP = 0.15;
 
+/** Aeons sell price for a piece of Equipment = base + level * per-level,
+ *  scaled by Tier — same `base + level*perLevel` shape monsterLoot.ts uses
+ *  for its own sell prices, just at a bigger scale since a full gear piece
+ *  is worth more than a trophy drop. Lets the Adventure backpack's Sell tab
+ *  offer a real price for gear the player doesn't want to keep. */
+const EQUIP_SELL_PRICE_BASE: Record<MonsterTier, number> = { regular: 15, elite: 35, miniboss: 70, boss: 150 };
+const EQUIP_SELL_PRICE_PER_LEVEL: Record<MonsterTier, number> = { regular: 2, elite: 3.5, miniboss: 5.5, boss: 9 };
+/** Unidentified gear sells for a discount off its (unrevealed) real price —
+ *  an "unknown quality" haircut, so identifying before selling is still
+ *  worth it when you have a spare Identify Scroll, but not required. */
+const UNID_EQUIP_SELL_PRICE_MULT = 0.5;
+
+function equipSellPriceFor(level: number, tier: MonsterTier): number {
+  return Math.max(1, Math.round(EQUIP_SELL_PRICE_BASE[tier] + level * EQUIP_SELL_PRICE_PER_LEVEL[tier]));
+}
+
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
@@ -232,6 +248,8 @@ MONSTER_ROSTER_RAW.forEach((entry) => {
   const setDesc = setId && setPartner ? ` Paired with ${setPartner}'s piece — wear both for a bonus.` : '';
   const rankDesc = elementSkillRanks ? ` +${elementSkillRanks} rank to your invested ${entry.element} skills.` : '';
 
+  const sellPrice = equipSellPriceFor(entry.level, entry.tier);
+
   MONSTER_EQUIPMENT_ITEMS[equipId] = {
     id: equipId,
     name: `${entry.name}'s ${SLOT_FLAVOR[slot]} [${socketCount}]`,
@@ -243,15 +261,18 @@ MONSTER_ROSTER_RAW.forEach((entry) => {
     statBonus: distributeAll(equipBudget, weights),
     itemLevel: entry.level,
     rarity,
+    sellPrice,
     elementResist: elementResist && Object.keys(elementResist).length ? elementResist : undefined,
     wandElementDmgPct,
     setId,
     setBonus,
     setBonusDesc: setId && setPartner ? `Set bonus with ${setPartner}'s piece: ${Object.entries(setBonus ?? {}).map(([k, v]) => `+${v} ${k.toUpperCase()}`).join(', ')}` : undefined,
     elementSkillRankBonus: elementSkillRanks ? { el: entry.element, ranks: elementSkillRanks } : undefined,
-    desc: `${RARITY_LABEL[rarity]} gear dropped by ${entry.name}. ${socketCount} socket${socketCount > 1 ? 's' : ''}.${resistDesc}${wandDesc}${setDesc}${rankDesc} Item Lv ${entry.level}.`,
+    desc: `${RARITY_LABEL[rarity]} gear dropped by ${entry.name}. ${socketCount} socket${socketCount > 1 ? 's' : ''}.${resistDesc}${wandDesc}${setDesc}${rankDesc} Item Lv ${entry.level}. The Crown Haven shop will buy this for 💰${sellPrice} Aeons.`,
   };
   EQUIPMENT_ID_BY_SPECIES[entry.name] = equipId;
+
+  const unidSellPrice = Math.max(1, Math.round(sellPrice * UNID_EQUIP_SELL_PRICE_MULT));
 
   const unidId = `unid_equip_${idSlug}`;
   MONSTER_UNID_EQUIPMENT_ITEMS[unidId] = {
@@ -264,7 +285,8 @@ MONSTER_ROSTER_RAW.forEach((entry) => {
     rarity,
     identified: false,
     identifiesInto: equipId,
-    desc: `An unidentified ${SLOT_FLAVOR[slot].toLowerCase()} — its stats (and any elemental resistance or wand affinity) are hidden until identified. Use an Identify Scroll to reveal it. Item Lv ${entry.level}.`,
+    sellPrice: unidSellPrice,
+    desc: `An unidentified ${SLOT_FLAVOR[slot].toLowerCase()} — its stats (and any elemental resistance or wand affinity) are hidden until identified. Use an Identify Scroll to reveal it, or sell it as-is for 💰${unidSellPrice} Aeons. Item Lv ${entry.level}.`,
   };
   UNID_EQUIPMENT_ID_BY_SPECIES[entry.name] = unidId;
 

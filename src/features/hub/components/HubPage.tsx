@@ -43,7 +43,7 @@ export function HubPage() {
 
   if (!party) return null;
 
-  const pvpProgress = party.picks.map((el) => `${HERO_NAMES[el]} ${party.mages[el]?.level ?? 1}/${PVP_UNLOCK_LEVEL}`).join(' · ');
+  const pvpProgress = party.picks.map((el) => `${party.characterName || HERO_NAMES[el]} ${party.mages[el]?.level ?? 1}/${PVP_UNLOCK_LEVEL}`).join(' · ');
 
   return (
     <div className="relative flex h-full flex-col overflow-y-auto px-5 py-6">
@@ -58,6 +58,12 @@ export function HubPage() {
             className="rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-[10px] font-bold text-white"
           >
             ? How to Play
+          </button>
+          <button
+            onClick={() => navigate('/character-select')}
+            className="rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-[10px] font-bold text-white"
+          >
+            🔄 Switch Character
           </button>
           <button
             onClick={() => { logout(); navigate('/auth'); }}
@@ -80,7 +86,7 @@ export function HubPage() {
           return (
             <div key={el} className="flex-1 rounded-[14px] border bg-[var(--panel-bg)] px-2 py-2.5 text-center backdrop-blur-md" style={{ borderColor: `${meta.color}66` }}>
               <div className="mx-auto h-10 w-10"><MageSprite el={el} /></div>
-              <div className="mt-0.5 font-['Baloo_2'] text-[11px] font-bold" style={{ color: meta.color }}>{HERO_NAMES[el]}</div>
+              <div className="mt-0.5 font-['Baloo_2'] text-[11px] font-bold" style={{ color: meta.color }}>{party.characterName || HERO_NAMES[el]}</div>
               <div className="text-[8px] font-bold uppercase text-white/40">Lv {m.level}</div>
               <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-black/30">
                 <div className="h-full rounded-full" style={{ width: `${xpPct}%`, background: 'linear-gradient(90deg,var(--color-gold),#ffe9c2)' }} />
@@ -95,7 +101,7 @@ export function HubPage() {
       </div>
 
       <div className="flex flex-1 flex-col gap-3">
-        <HubOption icon="🧙" name="Manage Party" desc="Change mages, skill loadouts & formation" onClick={() => navigate('/party')} />
+        <HubOption icon="🧙" name="Manage Character" desc="Stats, skills & gear" onClick={() => navigate('/party')} />
         <HubOption icon="🗺️" name="Adventure" desc="Explore Aetheria — fight monsters roaming the wilds" onClick={() => navigate('/map')} />
         <HubOption
           icon="⚔️"

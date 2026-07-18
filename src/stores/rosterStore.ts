@@ -1,74 +1,46 @@
 import { create } from 'zustand';
-import type { Element, Row } from '@/types';
-import type { FormationKey } from '@/constants/formations';
-import { computePlacementAfterMove } from '@/systems/party';
+import type { Element } from '@/types';
 
+/** New-character creation flow: Character Creation (name/hair/eye — see
+ *  AppearanceStep) then a Story beat that ends in picking the character's
+ *  ONE main element (see StoryStep). No placement/formation step anymore —
+ *  that only ever mattered for a multi-mage squad, and a character is a
+ *  single mage now (see the MMORPG rehaul plan). */
 interface RosterStore {
-  step: 'pickMage' | 'placement';
-  picks: Element[];
-  previewEl: Element | null;
-  formationType: FormationKey;
-  placements: Partial<Record<Element, Row>>;
-  movingEl: Element | null;
+  step: 'appearance' | 'story';
+  characterName: string;
+  hairColor: string;
+  eyeColor: string;
+  el: Element | null;
 
   reset: () => void;
-  toggleElement: (el: Element) => void;
-  setPreview: (el: Element) => void;
-  goToPlacement: () => void;
-  goBackToPickMage: () => void;
-  setFormation: (key: FormationKey) => void;
-  pickUp: (el: Element) => void;
-  placeAt: (target: Row | null, targetOccupantEl?: Element) => void;
-  /** For drag gestures: places `movingEl` directly, independent of any tap-flow `movingEl` in store state. */
-  placeDirect: (movingEl: Element, target: Row | null, targetOccupantEl?: Element) => void;
+  setCharacterName: (name: string) => void;
+  setHairColor: (color: string) => void;
+  setEyeColor: (color: string) => void;
+  goToStory: () => void;
+  goBackToAppearance: () => void;
+  pickElement: (el: Element) => void;
 }
 
 const initialState = {
-  step: 'pickMage' as const,
-  picks: [] as Element[],
-  previewEl: null as Element | null,
-  formationType: '2f1b' as FormationKey,
-  placements: {} as Partial<Record<Element, Row>>,
-  movingEl: null as Element | null,
+  step: 'appearance' as const,
+  characterName: '',
+  hairColor: '',
+  eyeColor: '',
+  el: null as Element | null,
 };
 
-export const useRosterStore = create<RosterStore>((set, get) => ({
+export const useRosterStore = create<RosterStore>((set) => ({
   ...initialState,
 
   reset: () => set({ ...initialState }),
 
-  toggleElement: (el) => {
-    const { picks } = get();
-    if (picks.includes(el)) {
-      set({ picks: picks.filter((p) => p !== el), previewEl: null });
-    } else if (picks.length < 3) {
-      set({ picks: [...picks, el], previewEl: el });
-    } else {
-      set({ previewEl: el });
-    }
-  },
+  setCharacterName: (name) => set({ characterName: name }),
+  setHairColor: (color) => set({ hairColor: color }),
+  setEyeColor: (color) => set({ eyeColor: color }),
 
-  setPreview: (el) => set({ previewEl: el }),
+  goToStory: () => set({ step: 'story' }),
+  goBackToAppearance: () => set({ step: 'appearance' }),
 
-  goToPlacement: () => set({ step: 'placement', placements: {}, movingEl: null }),
-  goBackToPickMage: () => set({ step: 'pickMage' }),
-
-  setFormation: (key) => {
-    // Switching shapes invalidates old slot positions — bench everyone and
-    // let the player re-place deliberately rather than silently reshuffling.
-    set({ formationType: key, placements: {}, movingEl: null });
-  },
-
-  pickUp: (el) => set((s) => ({ movingEl: s.movingEl === el ? null : el })),
-
-  placeAt: (target, targetOccupantEl) => {
-    const { movingEl, placements } = get();
-    if (!movingEl) return;
-    set({ placements: computePlacementAfterMove(placements, movingEl, target, targetOccupantEl), movingEl: null });
-  },
-
-  placeDirect: (movingEl, target, targetOccupantEl) => {
-    const { placements } = get();
-    set({ placements: computePlacementAfterMove(placements, movingEl, target, targetOccupantEl), movingEl: null });
-  },
+  pickElement: (el) => set((s) => ({ el: s.el === el ? null : el })),
 }));

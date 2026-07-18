@@ -1,16 +1,13 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Element } from '@/types';
-import { PartyOverview } from './PartyOverview';
+import { useGameStore } from '@/stores/gameStore';
 import { PartyMageDetail } from './PartyMageDetail';
-import { PartyFormationEditor } from './PartyFormationEditor';
-
-type View = 'overview' | 'mage' | 'formation';
 
 export function PartyPage() {
-  const [view, setView] = useState<View>('overview');
-  const [selectedMage, setSelectedMage] = useState<Element | null>(null);
+  const party = useGameStore((s) => s.party);
   const navigate = useNavigate();
+
+  const el = party?.picks[0];
+  if (!party || !el) return null;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -18,19 +15,12 @@ export function PartyPage() {
         <button onClick={() => navigate('/hub')} className="rounded-xl border border-white/14 bg-[var(--panel-bg)] px-3 py-1.5 font-['Baloo_2'] text-[11px] font-bold text-[#fff8f0]">
           ← Hub
         </button>
-        <div className="font-['Baloo_2'] text-base font-extrabold text-[#2c1f3d]">Party</div>
+        <div className="font-['Baloo_2'] text-base font-extrabold text-[#2c1f3d]">Character</div>
         <div className="w-[52px]" />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {view === 'overview' && (
-          <PartyOverview
-            onSelectMage={(el) => { setSelectedMage(el as Element); setView('mage'); }}
-            onFormation={() => setView('formation')}
-          />
-        )}
-        {view === 'mage' && selectedMage && <PartyMageDetail el={selectedMage} onBack={() => setView('overview')} />}
-        {view === 'formation' && <PartyFormationEditor onBack={() => setView('overview')} />}
+        <PartyMageDetail el={el} />
       </div>
     </div>
   );

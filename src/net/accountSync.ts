@@ -3,6 +3,7 @@ import { STARTING_RESPEC_TOKENS } from '@/constants';
 import { EVENTS } from './protocol';
 import type { AuthRequest, AuthResponse, SavePushPayload } from './protocol';
 import { connectToServer, emitWithAck, getServerUrl } from './socket';
+import { wireChatSocket } from './chatSocket';
 
 /**
  * Server-mode auth + save sync — only ever engaged when a Server URL has
@@ -44,6 +45,8 @@ function seedFromServer(res: Extract<AuthResponse, { ok: true }>): void {
     accounts: { ...s.accounts, [res.username]: s.accounts[res.username] ?? { password: '', respecTokens: STARTING_RESPEC_TOKENS } },
   }));
   startDebouncedSync();
+  const socket = connectToServer(getServerUrl());
+  if (socket) wireChatSocket(socket);
 }
 
 export function isServerConfigured(): boolean {

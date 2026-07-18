@@ -14,7 +14,6 @@ export interface VictoryLoot {
 
 export interface VictorySummary {
   xp: number;
-  aeons: number;
   loot: VictoryLoot[];
   levelUps: VictoryLevelUp[];
 }
@@ -56,10 +55,6 @@ export function EndOverlay({ battle, restartLabel, summary, onRestart }: EndOver
             <div className="flex-1 rounded-2xl border border-[var(--color-gold)]/30 bg-white/5 py-2.5">
               <div className="font-['Baloo_2'] text-[18px] font-extrabold text-[var(--color-gold)]">+{summary.xp}</div>
               <div className="text-[9px] font-bold uppercase tracking-wide text-white/50">XP each mage</div>
-            </div>
-            <div className="flex-1 rounded-2xl border border-[var(--color-gold)]/30 bg-white/5 py-2.5">
-              <div className="font-['Baloo_2'] text-[18px] font-extrabold text-[var(--color-gold)]">💰 {summary.aeons}</div>
-              <div className="text-[9px] font-bold uppercase tracking-wide text-white/50">Aeons</div>
             </div>
           </motion.div>
 

@@ -18,6 +18,18 @@ export const EVENTS = {
   HUB_SNAPSHOT: 'hub:snapshot',
   HUB_PLAYER_MOVED: 'hub:playerMoved',
   HUB_PLAYER_LEFT: 'hub:playerLeft',
+
+  CHAT_WORLD_SEND: 'chat:world:send',
+  CHAT_PARTY_SEND: 'chat:party:send',
+  CHAT_PRIVATE_SEND: 'chat:private:send',
+  CHAT_MESSAGE: 'chat:message',
+
+  PARTY_INVITE: 'party:invite',
+  PARTY_INVITE_RECEIVED: 'party:inviteReceived',
+  PARTY_ACCEPT: 'party:accept',
+  PARTY_DECLINE: 'party:decline',
+  PARTY_LEAVE: 'party:leave',
+  PARTY_SNAPSHOT: 'party:snapshot',
 } as const;
 
 export interface AuthRequest {
@@ -67,4 +79,46 @@ export interface HubMovePayload {
 
 export interface HubSnapshotPayload {
   players: HubPlayer[];
+}
+
+/** One chat line — every channel funnels through the same client-facing
+ *  `CHAT_MESSAGE` event, tagged here so the client can route/filter by tab
+ *  instead of the server needing 4 separate incoming event names. */
+export interface ChatMessage {
+  id: string;
+  channel: 'world' | 'party' | 'private' | 'system';
+  from: string;
+  /** Private only — the recipient username. */
+  to?: string;
+  body: string;
+  ts: number;
+}
+
+export interface ChatSendPayload {
+  body: string;
+}
+
+export interface ChatPrivateSendPayload {
+  toUsername: string;
+  body: string;
+}
+
+export interface PartyInvitePayload {
+  toUsername: string;
+}
+
+export interface PartyInviteReceivedPayload {
+  fromUsername: string;
+}
+
+export interface PartyRespondPayload {
+  fromUsername: string;
+}
+
+/** The multiplayer player-group a socket currently belongs to — entirely
+ *  separate from the `Party` type (a character's own single-mage build).
+ *  `groupId: null` + empty `members` means "not currently in a party." */
+export interface PartySnapshotPayload {
+  groupId: string | null;
+  members: string[];
 }

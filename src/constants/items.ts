@@ -13,8 +13,8 @@ import { MONSTER_CARD_ITEMS, MONSTER_CRIMSON_ITEMS, MONSTER_EQUIPMENT_ITEMS, MON
  * Consumable (heals in battle or from the overworld; the Town Portal Scroll
  * instead warps to Crown Haven City), and Etc (junk loot with no mechanical
  * effect — the one category the Crown Haven shop buys from the player, see
- * SHOP_BUY_ITEMS/AEON_TIER_REWARD for the other side of the Aeons currency
- * loop). ITEMS_BY_ID below also merges in `MONSTER_LOOT_ITEMS` — one
+ * SHOP_BUY_ITEMS for the other side of the Aeons currency loop). ITEMS_BY_ID
+ * below also merges in `MONSTER_LOOT_ITEMS` — one
  * procedurally-generated sellable Etc item per monster species, dropped at
  * MONSTER_LOOT_DROP_CHANCE per defeated monster (see monsterLoot.ts).
  */
@@ -150,8 +150,7 @@ export const STARTER_INVENTORY: Record<string, number> = {
   tattered_map_fragment: 1,
 };
 
-/** Aeons a fresh account starts with — enough for a first shop visit without making the economy meaningless. */
-export const STARTING_AEONS = 50;
-
-/** Aeons awarded per defeated monster Tier, granted alongside XP after an Adventure win (see BattlePage). */
-export const AEON_TIER_REWARD: Record<string, number> = { regular: 8, elite: 15, miniboss: 25, boss: 50 };
+/** Aeons a fresh character starts with — the economy's anchor. Battles no
+ *  longer grant Aeons (see systems/battle/team.ts) since respawning monsters
+ *  would otherwise be an unbounded gold-farming exploit. */
+export const STARTING_AEONS = 300;

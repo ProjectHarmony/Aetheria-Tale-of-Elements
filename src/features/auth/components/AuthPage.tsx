@@ -38,12 +38,11 @@ export function AuthPage() {
         if (mode === 'register') {
           const res = await registerOverServer(username, password);
           if (!res.ok) return setError(res.error);
-          navigate('/roster');
         } else {
           const res = await loginOverServer(username, password);
           if (!res.ok) return setError(res.error);
-          navigate(res.hasParty ? '/hub' : '/roster');
         }
+        navigate('/server-select');
       } catch {
         setError('Could not reach that server — check the URL and that it\'s running.');
       } finally {
@@ -55,12 +54,11 @@ export function AuthPage() {
     if (mode === 'register') {
       const res = register(username, password);
       if (!res.ok) return setError(res.error);
-      navigate('/roster');
     } else {
       const res = login(username, password);
       if (!res.ok) return setError(res.error);
-      navigate(res.hasParty ? '/hub' : '/roster');
     }
+    navigate('/server-select');
   }
 
   return (

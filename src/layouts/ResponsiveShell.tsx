@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ChatPanel } from '@/features/chat';
 
 /**
  * Three-tier responsive shell (single DOM tree — children mount once, only
@@ -22,6 +23,7 @@ export function ResponsiveShell({ children }: { children: ReactNode }) {
         <div className="absolute left-1/2 top-2.5 z-50 hidden h-[22px] w-[90px] -translate-x-1/2 rounded-b-[14px] bg-black sm:block lg:hidden" />
         <div className="pastel-sky relative flex h-full w-full flex-1 flex-col overflow-hidden sm:rounded-[32px] lg:rounded-[28px]">
           {children}
+          <ChatPanel />
         </div>
       </div>
     </div>

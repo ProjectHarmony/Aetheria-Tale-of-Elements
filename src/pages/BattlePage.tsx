@@ -16,7 +16,6 @@ export function BattlePage() {
   const battleContext = useGameStore((s) => s.battleContext);
   const party = useGameStore((s) => s.party);
   const grantXp = useGameStore((s) => s.grantXp);
-  const addAeons = useGameStore((s) => s.addAeons);
   const addItem = useGameStore((s) => s.addItem);
   const syncPartyHp = useGameStore((s) => s.syncPartyHp);
   const activeEncounter = useMapStore((s) => s.activeEncounter);
@@ -25,7 +24,6 @@ export function BattlePage() {
   const navigate = useNavigate();
   const xpGrantedRef = useRef(false);
   const xpRewardRef = useRef(60);
-  const aeonsRewardRef = useRef(8);
   const lootDropsRef = useRef<Record<string, number>>({});
   const encounterResolvedRef = useRef(false);
   const hpSyncedRef = useRef(false);
@@ -40,9 +38,8 @@ export function BattlePage() {
       const { heroes: players, runtimeCards } = buildPlayerTeamFromParty(party);
       const level = avgPartyLevel(party);
       if (battleContext === 'adventure' && activeEncounter) {
-        const { enemies, xpReward, aeonsReward, lootDrops, dmgScale } = buildEncounterEnemyTeam(activeEncounter.names, level);
+        const { enemies, xpReward, lootDrops, dmgScale } = buildEncounterEnemyTeam(activeEncounter.names, level);
         xpRewardRef.current = xpReward;
-        aeonsRewardRef.current = aeonsReward;
         lootDropsRef.current = lootDrops;
         startBattle(players, enemies, runtimeCards, dmgScale);
       } else {
@@ -98,14 +95,11 @@ export function BattlePage() {
     if (!won || battleContext !== 'adventure' || xpGrantedRef.current) return;
     xpGrantedRef.current = true;
     const xpAmount = xpRewardRef.current;
-    const aeonsAmount = aeonsRewardRef.current;
     const ups = grantXp(xpAmount);
-    addAeons(aeonsAmount);
     const lootEntries = Object.entries(lootDropsRef.current);
     lootEntries.forEach(([itemId, qty]) => addItem(itemId, qty));
     setSummary({
       xp: xpAmount,
-      aeons: aeonsAmount,
       loot: lootEntries.map(([itemId, qty]) => ({ itemId, qty })),
       levelUps: ups,
     });

@@ -4,7 +4,19 @@ import type { Account, BattleContext, Element, EquippedGear, GearSlot, Inventory
 import { CARD_SOCKET_SLOTS, ITEMS_BY_ID, SOUL_SOCKET_SLOT, STARTER_INVENTORY, STARTING_AEONS, STARTING_RESPEC_TOKENS } from '@/constants';
 import type { FormationKey } from '@/constants/formations';
 import { derivedStatsFor, newMageState } from '@/systems/battle';
-import { applyDraft, computePlacementAfterMove, grantPartyXp, partyPvpUnlocked, respecMage, type LevelUp, type MageDraft } from '@/systems/party';
+import { applyDraft, grantPartyXp, partyPvpUnlocked, respecMage, type LevelUp, type MageDraft } from '@/systems/party';
+
+/** One character slot's saved state — see CharacterSelectPage. `party`/
+ *  `inventory`/`aeons` below remain the single "currently active character"
+ *  fields (unchanged shape, zero ripple to existing consumers); this is the
+ *  parallel multi-slot store they get mirrored into/from on selection. */
+export interface CharacterSlot {
+  party: Party;
+  inventory: Inventory;
+  aeons: number;
+}
+
+export const MAX_CHARACTER_SLOTS = 4;
 
 interface GameStore {
   accounts: Record<string, Account>;
@@ -12,14 +24,36 @@ interface GameStore {
   party: Party | null;
   battleContext: BattleContext | null;
   inventory: Inventory;
-  /** Currency spent/earned at Crown Haven City's shop — see SHOP_BUY_ITEMS/AEON_TIER_REWARD. */
+  /** Currency spent/earned at Crown Haven City's shop — see SHOP_BUY_ITEMS. */
   aeons: number;
+  /** Cosmetic-only for now — no real server infrastructure exists yet (see
+   *  ServerSelectPage). Not persisted: picking a server is a per-session step. */
+  selectedServer: string | null;
+
+  /** All of this account's characters, keyed "0".."3" (MAX_CHARACTER_SLOTS).
+   *  `party`/`inventory`/`aeons` above always mirror whichever slot is active
+   *  (see the useGameStore.subscribe mirror below the store definition). */
+  characters: Record<string, CharacterSlot>;
+  activeCharacterId: string | null;
+  /** Loads a filled slot into the active party/inventory/aeons fields, or
+   *  (for an empty slot) just marks it active and clears `party` so the
+   *  RequireAccount-gated /roster flow starts from a clean character. */
+  selectCharacterSlot: (slotId: string) => void;
 
   register: (username: string, password: string) => { ok: true } | { ok: false; error: string };
   login: (username: string, password: string) => { ok: true; hasParty: boolean } | { ok: false; error: string };
   logout: () => void;
+  setSelectedServer: (serverId: string) => void;
 
-  createParty: (picks: Element[], placements: Partial<Record<Element, Row>>, formationType: FormationKey) => void;
+  createParty: (
+    picks: Element[],
+    placements: Partial<Record<Element, Row>>,
+    formationType: FormationKey,
+    appearance?: { name: string; hairColor: string; eyeColor: string },
+  ) => void;
+  /** Marks the new-character guided tutorial battle as done — TutorialPage
+   *  redirects straight past itself once this is true. */
+  completeTutorial: () => void;
   respec: (el: Element) => boolean;
   getRespecTokens: () => number;
   isPvpUnlocked: () => boolean;
@@ -30,8 +64,6 @@ interface GameStore {
    *  values on a win, or force every picked mage to 1 on a full party wipe. */
   syncPartyHp: (hpByEl: Partial<Record<Element, number>>) => void;
 
-  setFormationType: (key: FormationKey) => void;
-  moveMagePlacement: (el: Element, target: Row | null, targetOccupantEl?: Element) => void;
   applyMageDraft: (el: Element, draft: MageDraft) => void;
   setEquipped: (el: Element, equipped: string[]) => void;
 
@@ -100,6 +132,20 @@ export const useGameStore = create<GameStore>()(
       battleContext: null,
       inventory: {},
       aeons: 0,
+      selectedServer: null,
+      characters: {},
+      activeCharacterId: null,
+
+      setSelectedServer: (serverId) => set({ selectedServer: serverId }),
+
+      selectCharacterSlot: (slotId) => {
+        const slot = get().characters[slotId];
+        if (slot) {
+          set({ activeCharacterId: slotId, party: slot.party, inventory: slot.inventory, aeons: slot.aeons });
+        } else {
+          set({ activeCharacterId: slotId, party: null, inventory: {}, aeons: 0 });
+        }
+      },
 
       register: (username, password) => {
         const name = username.trim();
@@ -109,6 +155,8 @@ export const useGameStore = create<GameStore>()(
           accounts: { ...s.accounts, [name]: { password, respecTokens: STARTING_RESPEC_TOKENS } },
           user: name,
           party: null,
+          characters: {},
+          activeCharacterId: null,
         }));
         return { ok: true };
       },
@@ -124,10 +172,26 @@ export const useGameStore = create<GameStore>()(
 
       logout: () => set({ user: null }),
 
-      createParty: (picks, placements, formationType) => {
+      createParty: (picks, placements, formationType, appearance) => {
         const mages: Party['mages'] = {};
         picks.forEach((el) => { mages[el] = newMageState(el); });
-        set({ party: { picks, placements, mages, formationType }, inventory: { ...STARTER_INVENTORY }, aeons: STARTING_AEONS });
+        set({
+          party: {
+            picks, placements, mages, formationType,
+            characterName: appearance?.name,
+            hairColor: appearance?.hairColor,
+            eyeColor: appearance?.eyeColor,
+            tutorialCompleted: false,
+          },
+          inventory: { ...STARTER_INVENTORY },
+          aeons: STARTING_AEONS,
+        });
+      },
+
+      completeTutorial: () => {
+        const { party } = get();
+        if (!party) return;
+        set({ party: { ...party, tutorialCompleted: true } });
       },
 
       respec: (el) => {
@@ -171,20 +235,6 @@ export const useGameStore = create<GameStore>()(
           if (mage && hp !== undefined) mages[el] = { ...mage, currentHp: Math.max(0, hp) };
         });
         set({ party: { ...party, mages } });
-      },
-
-      setFormationType: (key) => {
-        const { party } = get();
-        if (!party) return;
-        // Switching shapes invalidates old slot positions — bench everyone,
-        // matching roster creation's rule (see rosterStore.setFormation).
-        set({ party: { ...party, formationType: key, placements: {} } });
-      },
-
-      moveMagePlacement: (el, target, targetOccupantEl) => {
-        const { party } = get();
-        if (!party) return;
-        set({ party: { ...party, placements: computePlacementAfterMove(party.placements, el, target, targetOccupantEl) } });
       },
 
       applyMageDraft: (el, draft) => {
@@ -387,11 +437,40 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'two-elements-save',
-      partialize: (state) => ({ accounts: state.accounts, user: state.user, party: state.party, inventory: state.inventory, aeons: state.aeons }),
+      partialize: (state) => ({
+        accounts: state.accounts, user: state.user, party: state.party, inventory: state.inventory, aeons: state.aeons,
+        characters: state.characters, activeCharacterId: state.activeCharacterId,
+      }),
       merge: (persistedState, currentState) => {
         const merged = { ...currentState, ...(persistedState as Partial<GameStore>) };
-        return { ...merged, party: normalizeParty(merged.party) };
+        const party = normalizeParty(merged.party);
+        // One-time migration for saves from before multi-character slots
+        // existed: a `party` with no matching `characters` entry gets seeded
+        // into slot "0" so the character already played this session isn't
+        // silently orphaned by Character Select showing 4 empty slots.
+        if (party && (!merged.characters || Object.keys(merged.characters).length === 0)) {
+          return {
+            ...merged,
+            party,
+            characters: { '0': { party, inventory: merged.inventory, aeons: merged.aeons } },
+            activeCharacterId: '0',
+          };
+        }
+        return { ...merged, party };
       },
     },
   ),
 );
+
+/** Mirrors the active party/inventory/aeons into their character slot on
+ *  every change — the one centralized sync point instead of threading
+ *  "also update characters[activeCharacterId]" through every action above. */
+useGameStore.subscribe((state, prevState) => {
+  if (!state.activeCharacterId) return;
+  if (state.party === prevState.party && state.inventory === prevState.inventory && state.aeons === prevState.aeons) return;
+  if (!state.party) return;
+  const id = state.activeCharacterId;
+  useGameStore.setState({
+    characters: { ...state.characters, [id]: { party: state.party, inventory: state.inventory, aeons: state.aeons } },
+  });
+});

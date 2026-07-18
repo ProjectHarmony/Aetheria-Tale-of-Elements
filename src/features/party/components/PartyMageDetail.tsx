@@ -18,7 +18,7 @@ import { ItemDetailModal } from './ItemDetailModal';
 
 type SubTab = 'stats' | 'skills' | 'equipment';
 
-export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => void }) {
+export function PartyMageDetail({ el }: { el: Element }) {
   const party = useGameStore((s) => s.party);
   const inventory = useGameStore((s) => s.inventory);
   const applyMageDraft = useGameStore((s) => s.applyMageDraft);
@@ -66,46 +66,38 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
 
   return (
     <div>
-      <button onClick={onBack} className="mb-3 flex items-center gap-1 text-[11px] font-bold text-[#2c1f3d]/80">← Mages</button>
-
-      <div className="mb-3 flex items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3">
-        <div className="h-14 w-14 flex-shrink-0"><MageSprite el={el} /></div>
-        <div>
-          <div className="font-['Baloo_2'] text-lg font-extrabold" style={{ color: meta.color }}>{HERO_NAMES[el]}</div>
+      <div className="mb-3 flex flex-col items-center gap-1.5 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4">
+        <div className="h-24 w-24 flex-shrink-0"><MageSprite el={el} /></div>
+        <div className="text-center">
+          <div className="font-['Baloo_2'] text-lg font-extrabold" style={{ color: meta.color }}>{party?.characterName || HERO_NAMES[el]}</div>
           <div className="mt-0.5 text-[10px] font-bold text-white/70">
             Level {mage.level} / {MAX_MAGE_LEVEL}{mage.level < MAX_MAGE_LEVEL ? ` · ${mage.xp}/${xpNeed} XP` : ' · MAX'}
           </div>
-          <div className="mt-1 h-1.5 w-[170px] overflow-hidden rounded-full bg-black/30">
-            <div className="h-full rounded-full" style={{ width: `${xpPct}%`, background: 'linear-gradient(90deg,var(--color-gold),#ffe9c2)' }} />
-          </div>
+        </div>
+        <div className="h-1.5 w-[170px] overflow-hidden rounded-full bg-black/30">
+          <div className="h-full rounded-full" style={{ width: `${xpPct}%`, background: 'linear-gradient(90deg,var(--color-gold),#ffe9c2)' }} />
+        </div>
+        <div className="mt-0.5 flex gap-3 text-[10.5px] font-bold text-white/70">
+          <span>❤️ {Math.round(d.maxHp)} HP</span>
+          <span>⚡ {Math.round(d.speed)} SPD</span>
         </div>
       </div>
 
-      <div className="mb-3 flex gap-1.5">
-        {[
-          { key: 'statPoints', label: 'Stat Points', val: statPointsLeft },
-          { key: 'skillPoints', label: 'Skill Points', val: skillPointsLeft },
-          { key: 'hp', label: 'Max HP', val: Math.round(d.maxHp) },
-          { key: 'speed', label: 'Speed', val: Math.round(d.speed) },
-        ].map((p) => (
-          <div key={p.key} className="flex-1 rounded-xl border border-white/10 bg-black/20 py-1.5 text-center">
-            <div className={`font-['Baloo_2'] text-[15px] font-extrabold ${p.val ? 'text-[var(--color-gold)]' : 'text-white/30'}`}>{p.val}</div>
-            <div className="text-[8px] font-bold text-white/50">{p.label}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="mb-3 flex gap-1">
-        {(['stats', 'skills', 'equipment'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`flex-1 rounded-xl py-2 text-[10.5px] font-bold uppercase tracking-wide ${subTab === t ? 'bg-[#241a30]/90 text-[#fff8f0]' : 'bg-[#1a1330]/70 text-white/55'}`}
-            style={subTab === t ? { boxShadow: `inset 0 0 0 1.5px ${meta.color}` } : undefined}
-          >
-            {t === 'stats' ? '📊 Stats' : t === 'skills' ? '📜 Skills' : '🎽 Gear'}
-          </button>
-        ))}
+        {(['stats', 'skills', 'equipment'] as const).map((t) => {
+          const label = t === 'stats' ? '📊 Stats' : t === 'skills' ? '📜 Skills' : '🎽 Gear';
+          const points = t === 'stats' ? statPointsLeft : t === 'skills' ? skillPointsLeft : 0;
+          return (
+            <button
+              key={t}
+              onClick={() => setSubTab(t)}
+              className={`flex-1 rounded-xl py-2 text-[10.5px] font-bold uppercase tracking-wide ${subTab === t ? 'bg-[#241a30]/90 text-[#fff8f0]' : 'bg-[#1a1330]/70 text-white/55'}`}
+              style={subTab === t ? { boxShadow: `inset 0 0 0 1.5px ${meta.color}` } : undefined}
+            >
+              {label}{points > 0 ? ` · ${points}` : ''}
+            </button>
+          );
+        })}
       </div>
 
       {subTab === 'stats' && (
@@ -158,7 +150,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
             onClick={() => setRespecConfirmOpen(true)}
             className="flex w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-[rgba(201,174,255,0.5)] bg-[#241c38]/90 py-2.5 font-['Baloo_2'] text-[13px] font-bold text-[#e4d6ff] disabled:opacity-40"
           >
-            🔄 Respec {HERO_NAMES[el]} <span className="text-[10px] font-semibold text-white/60">{tokens} Token{tokens === 1 ? '' : 's'} left</span>
+            🔄 Respec {party?.characterName || HERO_NAMES[el]} <span className="text-[10px] font-semibold text-white/60">{tokens} Token{tokens === 1 ? '' : 's'} left</span>
           </motion.button>
           <div className="mt-1.5 text-center text-[9.5px] text-[#2c1f3d]/60">Fully resets stats & skills, refunding every point to reallocate.</div>
         </div>
@@ -179,7 +171,7 @@ export function PartyMageDetail({ el, onBack }: { el: Element; onBack: () => voi
       <ConfirmModal
         open={respecConfirmOpen}
         title="Use a Respec Token?"
-        description={`Fully reset ${HERO_NAMES[el]}'s stats AND skills, refunding every point spent so far to reallocate freely? This costs 1 Respec Token — ${tokens} remaining.`}
+        description={`Fully reset ${party?.characterName || HERO_NAMES[el]}'s stats AND skills, refunding every point spent so far to reallocate freely? This costs 1 Respec Token — ${tokens} remaining.`}
         confirmLabel="Respec"
         onCancel={() => setRespecConfirmOpen(false)}
         onConfirm={() => {

@@ -22,9 +22,22 @@ export interface MageState {
 }
 
 export interface Party {
-  /** Exactly 3 elements, in pick order — the 4th is never recruited (permanent choice). */
+  /** As of the MMORPG rehaul: exactly ONE element — a character is one mage,
+   *  not a squad. Kept as an array (not a single `Element` field) since the
+   *  whole battle/party engine already iterates `picks` generically; a
+   *  length-1 array needed zero changes anywhere else. */
   picks: Element[];
   placements: Partial<Record<Element, Row>>;
   mages: Partial<Record<Element, MageState>>;
   formationType: FormationKey;
+  /** Player-chosen display name for their character — shown in place of the
+   *  element's fixed lore name (HERO_NAMES) wherever a mage's name renders. */
+  characterName?: string;
+  /** Character-creation appearance picks — placeholder swatches only until
+   *  real art exists; MageSprite doesn't visually reflect these yet. */
+  hairColor?: string;
+  eyeColor?: string;
+  /** Set once the new-character guided tutorial battle has been completed —
+   *  gates TutorialPage from ever showing again for this character. */
+  tutorialCompleted?: boolean;
 }
