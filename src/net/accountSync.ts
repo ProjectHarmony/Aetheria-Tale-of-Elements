@@ -4,6 +4,7 @@ import { EVENTS } from './protocol';
 import type { AuthRequest, AuthResponse, SavePushPayload } from './protocol';
 import { connectToServer, emitWithAck, getServerUrl } from './socket';
 import { wireChatSocket } from './chatSocket';
+import { wireRoomSocket } from './roomSocket';
 
 /**
  * Server-mode auth + save sync — only ever engaged when a Server URL has
@@ -46,7 +47,7 @@ function seedFromServer(res: Extract<AuthResponse, { ok: true }>): void {
   }));
   startDebouncedSync();
   const socket = connectToServer(getServerUrl());
-  if (socket) wireChatSocket(socket);
+  if (socket) { wireChatSocket(socket); wireRoomSocket(socket); }
 }
 
 export function isServerConfigured(): boolean {

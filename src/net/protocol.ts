@@ -30,6 +30,15 @@ export const EVENTS = {
   PARTY_DECLINE: 'party:decline',
   PARTY_LEAVE: 'party:leave',
   PARTY_SNAPSHOT: 'party:snapshot',
+  PARTY_STATUS_SEND: 'party:status:send',
+  PARTY_STATUS: 'party:status',
+
+  CHAT_ROOM_SEND: 'chat:room:send',
+  ROOM_CREATE: 'room:create',
+  ROOM_JOIN: 'room:join',
+  ROOM_LEAVE: 'room:leave',
+  ROOM_SNAPSHOT: 'room:snapshot',
+  ROOM_LIST_UPDATE: 'room:listUpdate',
 } as const;
 
 export interface AuthRequest {
@@ -86,7 +95,7 @@ export interface HubSnapshotPayload {
  *  instead of the server needing 4 separate incoming event names. */
 export interface ChatMessage {
   id: string;
-  channel: 'world' | 'party' | 'private' | 'system';
+  channel: 'world' | 'party' | 'private' | 'system' | 'room';
   from: string;
   /** Private only — the recipient username. */
   to?: string;
@@ -115,10 +124,82 @@ export interface PartyRespondPayload {
   fromUsername: string;
 }
 
+/** A party member's own character stats, as shown in the field Party List
+ *  (see MapPage.tsx) — deliberately just the 3 fields Ragnarok's own party
+ *  window shows: name, level, HP. Not the full character build. */
+export interface PartyMemberStatus {
+  name: string;
+  level: number;
+  hp: number;
+  maxHp: number;
+}
+
 /** The multiplayer player-group a socket currently belongs to — entirely
  *  separate from the `Party` type (a character's own single-mage build).
  *  `groupId: null` + empty `members` means "not currently in a party." */
 export interface PartySnapshotPayload {
   groupId: string | null;
   members: string[];
+  /** Every member's last-known status the server has cached — keyed by
+   *  username, so a member who joined before you sent your own first
+   *  update is still fully populated the instant you receive the snapshot. */
+  statuses: Record<string, PartyMemberStatus>;
+}
+
+export type PartyStatusSendPayload = PartyMemberStatus;
+
+export interface PartyStatusPayload extends PartyMemberStatus {
+  username: string;
+}
+
+/** A Ragnarok-style player-created chat room, anchored to wherever its
+ *  creator was standing in Crown Haven City when they made it (the marker
+ *  doesn't follow them afterward — matches the classic static room icon).
+ *  This is the PUBLIC listing shape broadcast to everyone in the hub — never
+ *  carries the password itself, only whether one is required. */
+export interface ChatRoomSummary {
+  id: string;
+  title: string;
+  ownerUsername: string;
+  occupants: number;
+  maxSize: number;
+  hasPassword: boolean;
+  x: number;
+  y: number;
+}
+
+export interface RoomCreatePayload {
+  title: string;
+  maxSize: number;
+  /** Omitted or empty = public room, anyone can join without a prompt. */
+  password?: string;
+  /** The creator's current Crown Haven position — the room marker is
+   *  anchored here permanently, same as HubMovePayload's x/y. */
+  x: number;
+  y: number;
+}
+
+export interface RoomJoinPayload {
+  roomId: string;
+  password?: string;
+}
+
+/** Shared ack shape for both ROOM_CREATE and ROOM_JOIN — create can fail for
+ *  largely the same reasons join can (already in a room; bad input). */
+export type RoomActionResult =
+  | { ok: true }
+  | { ok: false; error: 'wrong-password' | 'full' | 'not-found' | 'already-in-a-room' | 'invalid-title' | 'error' };
+
+/** The full member-list view of the room you're currently in — as opposed
+ *  to `ChatRoomSummary`, which is just the map-marker listing for rooms
+ *  you haven't joined yet. */
+export interface RoomSnapshotPayload {
+  roomId: string | null;
+  title: string;
+  members: string[];
+  maxSize: number;
+}
+
+export interface RoomListUpdatePayload {
+  rooms: ChatRoomSummary[];
 }

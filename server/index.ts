@@ -6,6 +6,7 @@ import { loadAccounts, loginAccount, registerAccount, saveAccountData } from './
 import { registerHubHandlers } from './hub';
 import { registerChatHandlers, WORLD_ROOM } from './chat';
 import { registerPartyHandlers } from './party';
+import { registerRoomHandlers } from './rooms';
 import { markOffline, markOnline } from './presence';
 
 const PORT = Number(process.env.PORT ?? 4000);
@@ -54,6 +55,7 @@ async function main() {
     registerHubHandlers(io, socket, () => authedUsername);
     registerChatHandlers(io, socket, () => authedUsername);
     registerPartyHandlers(io, socket, () => authedUsername);
+    registerRoomHandlers(io, socket, () => authedUsername);
   });
 
   httpServer.listen(PORT, () => {

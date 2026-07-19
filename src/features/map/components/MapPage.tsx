@@ -5,9 +5,13 @@ import { useMapStore } from '@/stores/mapStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useHubStore } from '@/stores/hubStore';
 import { useChatStore, type ChatBubble as ChatBubbleData } from '@/stores/chatStore';
+import { useRoomStore } from '@/stores/roomStore';
+import type { ChatRoomSummary, PartyMemberStatus, RoomActionResult } from '@/net/protocol';
 import { HUB_MAP_ID, MAPS, mapAccentColor, mapBackground, mapIconFor } from '@/constants';
+import { isTypingTarget } from '@/utils/dom';
 import { useWheelPinchZoom } from '@/hooks/useWheelPinchZoom';
 import { joinHub, leaveHub, moveHub } from '@/net/hubSync';
+import { createRoom, joinRoom } from '@/net/roomSocket';
 import { Joystick } from './Joystick';
 import { Minimap } from './Minimap';
 import { MinimapBadge } from './MinimapBadge';
@@ -25,10 +29,6 @@ const KEY_TO_DIR: Record<string, 'up' | 'down' | 'left' | 'right'> = {
   KeyA: 'left', ArrowLeft: 'left',
   KeyD: 'right', ArrowRight: 'right',
 };
-
-function isTypingTarget(el: Element | null): boolean {
-  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable);
-}
 
 /** Ragnarok-style speech balloon floating above a character's sprite — World
  *  chat renders white, Party chat a pale green, matching the classic
@@ -58,6 +58,283 @@ function ChatBubble({ bubble }: { bubble: ChatBubbleData }) {
   );
 }
 
+/** Field Party List — Name / Lv / HP for every current party member,
+ *  rendered below the Minimap whenever the player is in a multiplayer party
+ *  (see the chat/party system). A member's status shows "…" until their
+ *  first PARTY_STATUS update arrives (or the join snapshot already carried
+ *  one, if they'd reported it before you joined). */
+function PartyList({ members, statuses, selfUsername }: { members: string[]; statuses: Record<string, PartyMemberStatus>; selfUsername: string | null }) {
+  if (members.length === 0) return null;
+  return (
+    <div className="flex w-[128px] flex-col gap-1 rounded-xl border border-white/15 bg-[#241a30]/80 px-2 py-1.5 backdrop-blur-md">
+      <div className="text-[7.5px] font-bold uppercase tracking-wide text-white/40">🧑‍🤝‍🧑 Party</div>
+      {members.map((m) => {
+        const status = statuses[m];
+        return (
+          <div key={m} className="text-[8.5px] leading-snug">
+            <div className="truncate font-bold text-white/90">
+              {status?.name || m}
+              {m === selfUsername ? ' (You)' : ''}
+            </div>
+            <div className="text-white/50">{status ? `Lv${status.level} · ${status.hp}/${status.maxHp} HP` : '…'}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Static marker above a room's creator, Crown-Haven-only — clicking it
+ *  joins directly (public) or is intercepted by the caller to show a
+ *  password prompt first (private). Doesn't track the creator's later
+ *  movement, matching Ragnarok's own room icon behavior. */
+function RoomMarker({ room, isMine, onTap }: { room: ChatRoomSummary; isMine: boolean; onTap: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onTap}
+      className="absolute flex flex-col items-center"
+      style={{ left: room.x - 40, top: room.y - 46, width: 80 }}
+    >
+      <div
+        className={`flex max-w-full items-center gap-1 rounded-full border px-2 py-1 text-[8.5px] font-bold text-white backdrop-blur-md ${
+          isMine ? 'border-[var(--color-gold)]/70 bg-[var(--color-gold)]/15' : 'border-white/25 bg-black/50'
+        }`}
+      >
+        <span className="flex-shrink-0">🗨️</span>
+        <span className="truncate">{room.title}</span>
+        {room.hasPassword && <span className="flex-shrink-0">🔒</span>}
+      </div>
+      <div className="mt-0.5 text-[7px] font-bold text-white/60">{room.occupants}/{room.maxSize}</div>
+    </button>
+  );
+}
+
+/** Room-creation form — Title, a max-size stepper capped 2–10, and a
+ *  Public/Private toggle that only reveals the password field once Private
+ *  is picked (blank password otherwise = public, per the create ack). */
+function CreateRoomModal({ open, onClose, x, y }: { open: boolean; onClose: () => void; x: number; y: number }) {
+  const [title, setTitle] = useState('');
+  const [maxSize, setMaxSize] = useState(10);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  async function handleCreate() {
+    if (!title.trim()) { setError('Enter a room title.'); return; }
+    setBusy(true);
+    setError(null);
+    let res: RoomActionResult;
+    try {
+      res = await createRoom(title.trim(), maxSize, x, y, isPrivate ? password : undefined);
+    } catch {
+      setBusy(false);
+      setError('Lost connection to the server.');
+      return;
+    }
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error === 'already-in-a-room' ? "You're already in a room." : 'Could not create room.');
+      return;
+    }
+    setTitle('');
+    setPassword('');
+    setIsPrivate(false);
+    setMaxSize(10);
+    useChatStore.getState().setActiveTab('room');
+    useChatStore.getState().setOpen(true);
+    onClose();
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[400] flex items-end justify-center bg-black/55 backdrop-blur-sm"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 40 }}
+            animate={{ y: 0 }}
+            exit={{ y: 40 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[380px] rounded-t-[24px] border border-[var(--panel-border)] bg-[#241a30] p-5 pb-7"
+          >
+            <div className="mb-3 font-['Baloo_2'] text-base font-extrabold text-[#fff8f0]">🗨️ Create Room</div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Room title…"
+              maxLength={40}
+              className="mb-3 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-[12px] text-white outline-none"
+            />
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-white/70">Max players</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMaxSize((m) => Math.max(2, m - 1))}
+                  className="h-7 w-7 rounded-md border border-white/16 bg-white/8 font-['Baloo_2'] font-extrabold text-white/70"
+                >
+                  −
+                </button>
+                <span className="w-6 text-center font-['Baloo_2'] text-[13px] font-extrabold text-[#fff8f0]">{maxSize}</span>
+                <button
+                  onClick={() => setMaxSize((m) => Math.min(10, m + 1))}
+                  className="h-7 w-7 rounded-md border border-white/16 bg-white/8 font-['Baloo_2'] font-extrabold text-white/70"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="mb-3 flex gap-1.5">
+              <button
+                onClick={() => setIsPrivate(false)}
+                className={`flex-1 rounded-lg py-1.5 text-[10.5px] font-bold ${!isPrivate ? 'bg-[#1a1330] text-[#fff8f0]' : 'bg-[#1a1330]/50 text-white/45'}`}
+              >
+                🌐 Public
+              </button>
+              <button
+                onClick={() => setIsPrivate(true)}
+                className={`flex-1 rounded-lg py-1.5 text-[10.5px] font-bold ${isPrivate ? 'bg-[#1a1330] text-[#fff8f0]' : 'bg-[#1a1330]/50 text-white/45'}`}
+              >
+                🔒 Private
+              </button>
+            </div>
+            {isPrivate && (
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Room password…"
+                className="mb-3 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-[12px] text-white outline-none"
+              />
+            )}
+            {error && <div className="mb-2 text-[10px] font-bold text-[var(--color-danger)]">{error}</div>}
+            <div className="flex gap-2.5">
+              <button onClick={onClose} className="flex-1 rounded-[13px] border-[1.5px] border-white/18 bg-white/8 py-3 font-['Baloo_2'] text-[13px] font-extrabold text-white/70">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={busy}
+                className="flex-1 rounded-[13px] py-3 font-['Baloo_2'] text-[13px] font-extrabold text-[var(--color-gold-deep)] disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, var(--color-gold), var(--color-fire))' }}
+              >
+                {busy ? '…' : 'Create'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** Password prompt for tapping a locked room's marker — a public room skips
+ *  this entirely (see handleQuickJoin) and joins straight away. */
+function JoinRoomModal({ room, onClose }: { room: ChatRoomSummary | null; onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setPassword('');
+    setError(null);
+  }, [room?.id]);
+
+  useEffect(() => {
+    if (!room) return;
+    function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [room, onClose]);
+
+  async function handleJoin() {
+    if (!room) return;
+    setBusy(true);
+    setError(null);
+    let res: RoomActionResult;
+    try {
+      res = await joinRoom(room.id, password);
+    } catch {
+      setBusy(false);
+      setError('Lost connection to the server.');
+      return;
+    }
+    setBusy(false);
+    if (!res.ok) {
+      setError(
+        res.error === 'wrong-password' ? 'Wrong password.' :
+        res.error === 'full' ? 'That room is full.' :
+        res.error === 'already-in-a-room' ? "You're already in a room." : 'Could not join room.',
+      );
+      return;
+    }
+    useChatStore.getState().setActiveTab('room');
+    useChatStore.getState().setOpen(true);
+    onClose();
+  }
+
+  return (
+    <AnimatePresence>
+      {room && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[400] flex items-end justify-center bg-black/55 backdrop-blur-sm"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 40 }}
+            animate={{ y: 0 }}
+            exit={{ y: 40 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[380px] rounded-t-[24px] border border-[var(--panel-border)] bg-[#241a30] p-5 pb-7"
+          >
+            <div className="mb-1 font-['Baloo_2'] text-base font-extrabold text-[#fff8f0]">🔒 {room.title}</div>
+            <div className="mb-3 text-[10.5px] text-white/50">This room requires a password.</div>
+            <input
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
+              placeholder="Password…"
+              className="mb-3 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-[12px] text-white outline-none"
+            />
+            {error && <div className="mb-2 text-[10px] font-bold text-[var(--color-danger)]">{error}</div>}
+            <div className="flex gap-2.5">
+              <button onClick={onClose} className="flex-1 rounded-[13px] border-[1.5px] border-white/18 bg-white/8 py-3 font-['Baloo_2'] text-[13px] font-extrabold text-white/70">
+                Cancel
+              </button>
+              <button
+                onClick={handleJoin}
+                disabled={busy}
+                className="flex-1 rounded-[13px] py-3 font-['Baloo_2'] text-[13px] font-extrabold text-[var(--color-gold-deep)] disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, var(--color-gold), var(--color-fire))' }}
+              >
+                {busy ? '…' : 'Join'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export function MapPage() {
   const mapId = useMapStore((s) => s.mapId);
   const playerPos = useMapStore((s) => s.playerPos);
@@ -81,16 +358,66 @@ export function MapPage() {
   const user = useGameStore((s) => s.user);
   const otherPlayers = useHubStore((s) => s.otherPlayers);
   const bubbles = useChatStore((s) => s.bubbles);
+  const partyMembers = useChatStore((s) => s.partyMembers);
+  const partyStatuses = useChatStore((s) => s.partyStatuses);
+  const rooms = useRoomStore((s) => s.rooms);
+  const activeRoom = useRoomStore((s) => s.activeRoom);
   const navigate = useNavigate();
   const rafRef = useRef<number>(0);
   const heldDirs = useRef(new Set<string>());
   const lastHubEmit = useRef({ t: 0, x: 0, y: 0 });
+  // Read inside the WASD keydown handler (registered once, closure-stale
+  // otherwise) — kept in sync by the effect below whenever activeRoom
+  // changes, same "ref mirrors reactive state for a mount-once listener"
+  // pattern heldDirs itself already uses.
+  const inRoomRef = useRef(false);
   const elementPreview = party?.picks[0] ?? null;
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewSize, setViewSize] = useState({ w: 370, h: 780 });
   const [worldMapOpen, setWorldMapOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [passwordPromptRoom, setPasswordPromptRoom] = useState<ChatRoomSummary | null>(null);
+  const [roomError, setRoomError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!roomError) return;
+    const t = setTimeout(() => setRoomError(null), 3000);
+    return () => clearTimeout(t);
+  }, [roomError]);
+
+  // Being inside a chat room anchors the character in place — same as
+  // Ragnarok's own room behavior, not just "the panel happens to be open."
+  // Snaps any in-flight movement to a dead stop the instant a room is
+  // joined/created, and blocks new WASD input for as long as you're in one
+  // (see the keydown handler below and the Joystick render further down).
+  useEffect(() => {
+    inRoomRef.current = !!activeRoom;
+    if (activeRoom) {
+      heldDirs.current.clear();
+      setJoyVec({ x: 0, y: 0 });
+    }
+  }, [activeRoom, setJoyVec]);
+
+  async function handleQuickJoin(room: ChatRoomSummary) {
+    let res: RoomActionResult;
+    try {
+      res = await joinRoom(room.id);
+    } catch {
+      setRoomError('Lost connection to the server.');
+      return;
+    }
+    if (!res.ok) {
+      setRoomError(
+        res.error === 'full' ? 'That room is full.' :
+        res.error === 'already-in-a-room' ? "You're already in a room." : 'Could not join room.',
+      );
+      return;
+    }
+    useChatStore.getState().setActiveTab('room');
+    useChatStore.getState().setOpen(true);
+  }
 
   // Gameplay camera always centers on the player, never on the cursor/pinch
   // point, so the gesture's anchor coordinates are irrelevant here — unlike
@@ -148,7 +475,7 @@ export function MapPage() {
     }
     function onKeyDown(e: KeyboardEvent) {
       const dir = KEY_TO_DIR[e.code];
-      if (!dir || isTypingTarget(document.activeElement)) return;
+      if (!dir || isTypingTarget(document.activeElement) || inRoomRef.current) return;
       if (e.repeat === false || !heldDirs.current.has(dir)) e.preventDefault();
       heldDirs.current.add(dir);
       recompute();
@@ -283,6 +610,19 @@ export function MapPage() {
           </div>
         ))}
 
+        {mapId === HUB_MAP_ID && rooms.map((room) => (
+          <RoomMarker
+            key={room.id}
+            room={room}
+            isMine={activeRoom?.roomId === room.id}
+            onTap={() => {
+              if (activeRoom?.roomId === room.id) return;
+              if (room.hasPassword) setPasswordPromptRoom(room);
+              else handleQuickJoin(room);
+            }}
+          />
+        ))}
+
         <div className="absolute flex h-8 w-8 items-center justify-center text-2xl" style={{ left: playerPos.x - 16, top: playerPos.y - 16, filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.4))' }}>
           <AnimatePresence>{user && bubbles[user] && <ChatBubble bubble={bubbles[user]!} />}</AnimatePresence>
           🧙
@@ -309,6 +649,7 @@ export function MapPage() {
             <span className="mt-0.5 block text-[8.5px] font-semibold text-white/45">{map.sub}</span>
           </div>
           <Minimap map={map} playerPos={playerPos} onClick={() => setWorldMapOpen(true)} />
+          <PartyList members={partyMembers} statuses={partyStatuses} selfUsername={user} />
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-1.5">
@@ -349,7 +690,41 @@ export function MapPage() {
         </motion.div>
       )}
 
-      <Joystick onChange={setJoyVec} />
+      {roomError && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="absolute left-1/2 top-16 z-40 -translate-x-1/2 rounded-full border border-[var(--color-danger)]/50 bg-[#241a30]/90 px-4 py-1.5 text-center backdrop-blur-md"
+        >
+          <span className="font-['Baloo_2'] text-[11px] font-bold text-[var(--color-danger)]">{roomError}</span>
+        </motion.div>
+      )}
+
+      {activeRoom && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute left-1/2 top-16 z-40 -translate-x-1/2 rounded-full border border-[var(--color-gold)]/50 bg-[#241a30]/90 px-4 py-1.5 text-center backdrop-blur-md"
+        >
+          <span className="font-['Baloo_2'] text-[11px] font-bold text-[var(--color-gold)]">
+            🗨️ In "{activeRoom.title}" — Leave the room to move
+          </span>
+        </motion.div>
+      )}
+
+      {!activeRoom && <Joystick onChange={setJoyVec} />}
+
+      {mapId === HUB_MAP_ID && (
+        <button
+          onClick={() => setCreateRoomOpen(true)}
+          disabled={!!activeRoom}
+          title={activeRoom ? 'Leave your current room first' : 'Create a chat room'}
+          className="absolute bottom-3 right-16 z-[300] flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-[#241a30]/85 text-lg backdrop-blur-md disabled:opacity-30"
+        >
+          🗨️
+        </button>
+      )}
 
       <div className={`map-transition-veil ${locked && !pendingEncounter ? 'show' : ''}`} />
       <div className={`map-area-banner ${areaBanner ? 'show' : ''}`}>
@@ -365,6 +740,8 @@ export function MapPage() {
 
       {worldMapOpen && <WorldMapModal currentMapId={mapId} visitedMaps={visitedMaps} onClose={() => setWorldMapOpen(false)} />}
       <MapItemsSheet open={itemsOpen} map={map} onClose={() => setItemsOpen(false)} />
+      <CreateRoomModal open={createRoomOpen} onClose={() => setCreateRoomOpen(false)} x={playerPos.x} y={playerPos.y} />
+      <JoinRoomModal room={passwordPromptRoom} onClose={() => setPasswordPromptRoom(null)} />
     </div>
   );
 }

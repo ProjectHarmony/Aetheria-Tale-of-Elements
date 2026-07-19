@@ -3,8 +3,11 @@ import {
   EVENTS,
   type PartyInvitePayload,
   type PartyInviteReceivedPayload,
+  type PartyMemberStatus,
   type PartyRespondPayload,
   type PartySnapshotPayload,
+  type PartyStatusPayload,
+  type PartyStatusSendPayload,
 } from '@/net/protocol';
 import { socketIdsFor, isOnline } from './presence';
 import { sendSystemMessage } from './systemMessage';
@@ -32,6 +35,12 @@ const groups = new Map<string, Group>();
 const groupIdByUsername = new Map<string, string>();
 /** One outstanding invite per recipient — keyed by the invited username. */
 const pendingInvites = new Map<string, string>();
+/** Last-known name/level/HP per username — shown in the field Party List
+ *  (see MapPage.tsx). Kept independent of group membership so a status that
+ *  arrives moments before PARTY_ACCEPT finishes isn't lost, and so a fresh
+ *  snapshot to a newly-joined member is never missing a stat any existing
+ *  member has already reported. */
+const statusByUsername = new Map<string, PartyMemberStatus>();
 let groupSeq = 0;
 
 export function roomFor(groupId: string): string {
@@ -50,10 +59,19 @@ function emitSnapshot(io: Server, socketIds: string[], payload: PartySnapshotPay
   socketIds.forEach((id) => io.to(id).emit(EVENTS.PARTY_SNAPSHOT, payload));
 }
 
+function statusesFor(members: Iterable<string>): Record<string, PartyMemberStatus> {
+  const statuses: Record<string, PartyMemberStatus> = {};
+  for (const m of members) {
+    const s = statusByUsername.get(m);
+    if (s) statuses[m] = s;
+  }
+  return statuses;
+}
+
 function broadcastSnapshot(io: Server, groupId: string): void {
   const group = groups.get(groupId);
   if (!group) return;
-  emitSnapshot(io, memberSocketIds(group), { groupId, members: Array.from(group.members) });
+  emitSnapshot(io, memberSocketIds(group), { groupId, members: Array.from(group.members), statuses: statusesFor(group.members) });
 }
 
 function joinRoomForMember(io: Server, groupId: string, username: string): void {
@@ -74,6 +92,11 @@ function removeMember(io: Server, username: string | null): void {
   const group = groups.get(groupId);
   groupIdByUsername.delete(username);
   leaveRoomForMember(io, groupId, username);
+  // Tell the leaver's own client(s) they're out too — every other snapshot
+  // below only reaches whoever's still IN the group, which by definition
+  // excludes the person who just left. A no-op on a disconnect-triggered
+  // removal (that socket's already gone from presence by then).
+  emitSnapshot(io, socketIdsFor(username), { groupId: null, members: [], statuses: {} });
   if (!group) return;
   group.members.delete(username);
 
@@ -85,7 +108,7 @@ function removeMember(io: Server, username: string | null): void {
     });
     const remainingSocketIds = remaining.flatMap(socketIdsFor);
     sendSystemMessage(io, remainingSocketIds, `${username} left the party. Your party has disbanded.`);
-    emitSnapshot(io, remainingSocketIds, { groupId: null, members: [] });
+    emitSnapshot(io, remainingSocketIds, { groupId: null, members: [], statuses: {} });
     groups.delete(groupId);
   } else {
     sendSystemMessage(io, memberSocketIds(group), `${username} left the party.`);
@@ -151,4 +174,16 @@ export function registerPartyHandlers(io: Server, socket: Socket, getUsername: (
 
   socket.on(EVENTS.PARTY_LEAVE, () => removeMember(io, getUsername()));
   socket.on('disconnect', () => removeMember(io, getUsername()));
+
+  socket.on(EVENTS.PARTY_STATUS_SEND, (payload: PartyStatusSendPayload) => {
+    const username = getUsername();
+    if (!username) return;
+    statusByUsername.set(username, payload);
+    const groupId = groupIdByUsername.get(username);
+    if (!groupId) return;
+    const group = groups.get(groupId);
+    if (!group) return;
+    const msg: PartyStatusPayload = { username, ...payload };
+    memberSocketIds(group).forEach((id) => io.to(id).emit(EVENTS.PARTY_STATUS, msg));
+  });
 }

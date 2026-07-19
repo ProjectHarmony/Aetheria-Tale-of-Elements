@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatMessage } from '@/net/protocol';
+import type { ChatMessage, PartyMemberStatus } from '@/net/protocol';
 
 const MAX_MESSAGES = 300;
 
@@ -30,6 +30,9 @@ const BUBBLE_DURATION_MS = 6000;
 interface ChatState {
   messages: ChatMessage[];
   partyMembers: string[];
+  /** Last-known name/level/HP per party member — keyed by username, powers
+   *  the field Party List (see MapPage.tsx). */
+  partyStatuses: Record<string, PartyMemberStatus>;
   pendingInvite: PendingInvite | null;
   activeTab: ChatChannel;
   privateTarget: string;
@@ -37,16 +40,29 @@ interface ChatState {
   /** Keyed by username — the map screen renders these above whichever
    *  sprite (self or another visible player) the username belongs to. */
   bubbles: Record<string, ChatBubble>;
+  /** Whether the floating chat panel is open — lives here (not local
+   *  component state) so MapPage.tsx can suspend character movement while
+   *  it's open, same reason the create/join-room modals track their own
+   *  open state locally instead. */
+  isOpen: boolean;
+  setOpen: (open: boolean) => void;
+  toggleOpen: () => void;
   addMessage: (msg: ChatMessage) => void;
-  setPartySnapshot: (members: string[]) => void;
+  setPartySnapshot: (members: string[], statuses: Record<string, PartyMemberStatus>) => void;
+  setPartyMemberStatus: (username: string, status: PartyMemberStatus) => void;
   setPendingInvite: (invite: PendingInvite | null) => void;
   setActiveTab: (tab: ChatChannel) => void;
   setPrivateTarget: (target: string) => void;
   markRead: (channel: ChatChannel) => void;
+  /** Drops every message on one channel — used when Party/Room membership
+   *  changes identity (leaving one group/room and joining a different one),
+   *  so the old group's history doesn't linger and read as if it were part
+   *  of the new one's conversation. */
+  clearChannel: (channel: ChatChannel) => void;
   clear: () => void;
 }
 
-const NO_UNREAD: Record<ChatChannel, boolean> = { world: false, party: false, private: false, system: false };
+const NO_UNREAD: Record<ChatChannel, boolean> = { world: false, party: false, private: false, system: false, room: false };
 
 function isBubbleChannel(channel: ChatChannel): channel is BubbleChannel {
   return channel === 'world' || channel === 'party';
@@ -55,12 +71,16 @@ function isBubbleChannel(channel: ChatChannel): channel is BubbleChannel {
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   partyMembers: [],
+  partyStatuses: {},
   pendingInvite: null,
   activeTab: 'world',
   privateTarget: '',
   unread: { ...NO_UNREAD },
   bubbles: {},
+  isOpen: false,
 
+  setOpen: (open) => set({ isOpen: open }),
+  toggleOpen: () => set((s) => ({ isOpen: !s.isOpen })),
   addMessage: (msg) => {
     set((s) => ({
       messages: [...s.messages, msg].slice(-MAX_MESSAGES),
@@ -82,10 +102,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }, BUBBLE_DURATION_MS);
     }
   },
-  setPartySnapshot: (members) => set({ partyMembers: members }),
+  setPartySnapshot: (members, statuses) => set({ partyMembers: members, partyStatuses: statuses }),
+  setPartyMemberStatus: (username, status) => set((s) => ({ partyStatuses: { ...s.partyStatuses, [username]: status } })),
   setPendingInvite: (invite) => set({ pendingInvite: invite }),
   setActiveTab: (tab) => set((s) => ({ activeTab: tab, unread: { ...s.unread, [tab]: false } })),
   setPrivateTarget: (target) => set({ privateTarget: target }),
   markRead: (channel) => set((s) => ({ unread: { ...s.unread, [channel]: false } })),
-  clear: () => set({ messages: [], partyMembers: [], pendingInvite: null, unread: { ...NO_UNREAD }, bubbles: {} }),
+  clearChannel: (channel) => set((s) => ({ messages: s.messages.filter((m) => m.channel !== channel) })),
+  clear: () => set({ messages: [], partyMembers: [], partyStatuses: {}, pendingInvite: null, unread: { ...NO_UNREAD }, bubbles: {}, isOpen: false }),
 }));
