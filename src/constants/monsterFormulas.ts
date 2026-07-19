@@ -136,11 +136,16 @@ export function computeMonsterStats(
   element: Element,
   pointMultExtra = 1,
   tierPointMultOverride?: number,
+  elementLevelOverride?: number,
 ): ComputedMonsterStats {
   const tierPointMult = tierPointMultOverride ?? TIER_PROFILES[tier].pointMult;
   const totalPoints = Math.round(STAT_POINTS_PER_LEVEL * level * tierPointMult * pointMultExtra);
   const alloc = allocatePoints(totalPoints, ROLE_STAT_WEIGHTS[role]);
   const elementProfile = ROLE_ELEMENT_PROFILES[role];
+  // Exposure (Element Level) is hand-authored per monster in the database —
+  // resist depth stays Role-derived, since the database doesn't carry a
+  // separate resist rating.
+  const elementLevel = elementLevelOverride ?? elementProfile.elementLevel;
 
   const hp = Math.round(HERO_HP[element] + alloc.vit * STAT_SCALE.vit);
   const dmg = Math.round(BASE_MONSTER_DMG * (1 + alloc.pow * STAT_SCALE.pow));
@@ -151,8 +156,8 @@ export function computeMonsterStats(
 
   return {
     hp, dmg, speed, accuracy, dodge, crit,
-    elementLevel: elementProfile.elementLevel,
+    elementLevel,
     elementResistLevel: elementProfile.elementResistLevel,
-    netCounterMult: netCounterMult(elementProfile.elementLevel, elementProfile.elementResistLevel),
+    netCounterMult: netCounterMult(elementLevel, elementProfile.elementResistLevel),
   };
 }

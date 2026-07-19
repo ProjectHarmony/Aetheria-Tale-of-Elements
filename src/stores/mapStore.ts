@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Roamer, Vec2 } from '@/types';
+import type { Element, Roamer, Vec2 } from '@/types';
 import { BOSS_UNDERLINGS, HUB_MAP_ID, MAPS, MONSTER_META, RESPAWN_MS } from '@/constants';
 import {
   ambientDrift,
@@ -69,6 +69,18 @@ interface MapStore {
    *  Scroll (see MapItemsSheet) and shared with resolveEncounter's loss path. */
   warpToHub: () => void;
   toggleRest: () => void;
+  /** Safety net for a battle interrupted mid-resolution (tab backgrounded/
+   *  reloaded/killed while the animated round-by-round reveal was still
+   *  playing out — see BattlePage's HP-sync/warp effects, which only fire
+   *  once `battle.phase` reaches `'ended'`). `battleStore` itself isn't
+   *  persisted, so an interrupted fight is unrecoverable either way — but
+   *  `activeEncounter` IS now persisted (see partialize below), so a stale
+   *  non-null value surviving into a fresh page load means the previous
+   *  session's fight never got to finish. Treated as a loss for safety
+   *  (mercy 1 HP + warp home) rather than silently leaving the player
+   *  parked on the old field map with pre-battle HP, as if the fight never
+   *  happened. Called once per session from `RequireParty` (App.tsx). */
+  recoverFromOrphanedEncounter: () => void;
 }
 
 // Session-only (never persisted, matching the original's plain in-memory
@@ -295,10 +307,28 @@ export const useMapStore = create<MapStore>()(
           joyVec: { x: 0, y: 0 },
         });
       },
+
+      recoverFromOrphanedEncounter: () => {
+        const { activeEncounter } = get();
+        if (!activeEncounter) return;
+        const party = useGameStore.getState().party;
+        if (party) {
+          const hpByEl: Partial<Record<Element, number>> = {};
+          party.picks.forEach((el) => { hpByEl[el] = 1; });
+          useGameStore.getState().syncPartyHp(hpByEl);
+        }
+        get().warpToHub();
+        set({ activeEncounter: null, pendingEncounter: false });
+      },
     }),
     {
       name: 'two-elements-map-save',
-      partialize: (state) => ({ mapId: state.mapId, playerPos: state.playerPos, visitedMaps: state.visitedMaps }),
+      partialize: (state) => ({
+        mapId: state.mapId, playerPos: state.playerPos, visitedMaps: state.visitedMaps,
+        // Persisted specifically so recoverFromOrphanedEncounter can detect,
+        // on the NEXT load, that the last session's fight never resolved.
+        activeEncounter: state.activeEncounter,
+      }),
     },
   ),
 );

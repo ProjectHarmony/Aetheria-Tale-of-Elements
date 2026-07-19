@@ -38,10 +38,17 @@ export function getSocket(): Socket | null {
   return socket;
 }
 
-/** Promise-wrapped emit-with-acknowledgement — Socket.IO's ack callback as a promise, nothing more. */
-export function emitWithAck<TReq, TRes>(event: string, payload: TReq): Promise<TRes> {
+/** Promise-wrapped emit-with-acknowledgement — Socket.IO's ack callback as a
+ *  promise, plus a timeout. Without one, an unreachable server (wrong URL,
+ *  server not running) leaves the emit buffered forever waiting for an ack
+ *  that will never come — the promise never settles, so callers like
+ *  AuthPage's submit() get stuck on "Connecting…" with no error shown. */
+export function emitWithAck<TReq, TRes>(event: string, payload: TReq, timeoutMs = 6000): Promise<TRes> {
   return new Promise((resolve, reject) => {
     if (!socket) { reject(new Error('Not connected to a server.')); return; }
-    socket.emit(event, payload, (res: TRes) => resolve(res));
+    socket.timeout(timeoutMs).emit(event, payload, (err: Error | null, res: TRes) => {
+      if (err) { reject(err); return; }
+      resolve(res);
+    });
   });
 }

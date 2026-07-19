@@ -86,12 +86,14 @@ const AOE_SLUGS = new Set(['unnerving_roar', 'cleave', 'wide_slash']);
 // ============================================================
 interface BossSignatureDef { slug: string; name: string; cost: number; dmgMult: number; desc: string; effect?: SkillEffect; aoe?: boolean }
 export const BOSS_SIGNATURE_SKILLS: Record<string, BossSignatureDef> = {
-  'Ulvarion, the Hollow Crown': { slug: 'crownfall', name: 'Crownfall', cost: 4, dmgMult: 1.8, aoe: true, desc: 'AoE all enemies, cannot miss, each target Shred -10% dmg dealt 2 rounds.', effect: { guaranteedHit: true, targetDmgDownPct: 0.10, targetDmgDownRounds: 2 } },
-  'Nyssandra, the Quiet Reign': { slug: 'silent_verdict', name: 'Silent Verdict', cost: 4, dmgMult: 1.2, desc: 'TAUNT all enemies + self-shield +40% of own Final HP.', effect: { tauntRounds: 1 } }, // selfShieldFlat added at build time (40% of own HP)
-  'Korrigahn, the Endless Debt': { slug: 'debt_collection', name: 'Debt Collection', cost: 4, dmgMult: 1.3, desc: 'Target -20% dmg dealt AND -15% Accuracy, 2 rounds.', effect: { targetDmgDownPct: 0.20, targetDmgDownRounds: 2, targetAccDownPct: 0.15, targetAccDownRounds: 2 } },
-  'Thessaline, the Last Vigil': { slug: 'vigils_embrace', name: "Vigil's Embrace", cost: 4, dmgMult: 0, desc: 'Heal self + both Underlings 30% of their own Final HP, cleanse all debuffs.', effect: { teamHealPctOfMaxHp: 0.30, cleanseTeam: true } },
-  'Duskrend, the Marrowking': { slug: 'marrow_ruin', name: 'Marrow Ruin', cost: 4, dmgMult: 2, desc: "Ignores 20% of target's Shield.", effect: { shieldPiercePct: 0.20 } },
-  'Velkhazor, the Unmaking': { slug: 'the_unmaking', name: 'The Unmaking', cost: 4, dmgMult: 1.5, desc: '+70% dmg vs targets under 40% HP.', effect: { dmgVsLowHpActivePct: 0.70, lowHpThreshold: 0.40 } },
+  'Aurelion': { slug: 'crownfall', name: 'Crownfall', cost: 4, dmgMult: 1.8, aoe: true, desc: 'AoE all enemies, cannot miss, each target Shred -10% dmg dealt 2 rounds.', effect: { guaranteedHit: true, targetDmgDownPct: 0.10, targetDmgDownRounds: 2 } },
+  'Morvain': { slug: 'silent_verdict', name: 'Silent Verdict', cost: 4, dmgMult: 1.2, desc: 'TAUNT all enemies + self-shield +40% of own Final HP.', effect: { tauntRounds: 1 } }, // selfShieldFlat added at build time (40% of own HP)
+  'Seraphel': { slug: 'debt_collection', name: 'Debt Collection', cost: 4, dmgMult: 1.3, desc: 'Target -20% dmg dealt AND -15% Accuracy, 2 rounds.', effect: { targetDmgDownPct: 0.20, targetDmgDownRounds: 2, targetAccDownPct: 0.15, targetAccDownRounds: 2 } },
+  'Dreadmare': { slug: 'vigils_embrace', name: "Vigil's Embrace", cost: 4, dmgMult: 0, desc: 'Heal self + both Underlings 30% of their own Final HP, cleanse all debuffs.', effect: { teamHealPctOfMaxHp: 0.30, cleanseTeam: true } },
+  'Umbriel': { slug: 'marrow_ruin', name: 'Marrow Ruin', cost: 4, dmgMult: 2, desc: "Ignores 20% of target's Shield.", effect: { shieldPiercePct: 0.20 } },
+  'Volaris': { slug: 'the_unmaking', name: 'The Unmaking', cost: 4, dmgMult: 1.5, desc: '+70% dmg vs targets under 40% HP.', effect: { dmgVsLowHpActivePct: 0.70, lowHpThreshold: 0.40 } },
+  // Nethriel/Eldrune/Solmare (the 3 newly added Bosses) have no hand-authored
+  // signature yet — they fall back to their Role's normal skill kit until one is designed.
 };
 
 // ============================================================
@@ -103,7 +105,7 @@ const FIELD_REVERSAL: { slug: string; name: string; cost: number; effect: SkillE
 const RUINOUS_CHARGE: { slug: string; name: string; cost: number; effect: SkillEffect } = {
   slug: 'ruinous_charge', name: 'Ruinous Charge', cost: 5, effect: { channelKind: 'ruinousCharge' },
 };
-const RUINOUS_CHARGE_NAMES = new Set(['Korrigahn, the Endless Debt', 'Velkhazor, the Unmaking']);
+const RUINOUS_CHARGE_NAMES = new Set(['Seraphel', 'Volaris']);
 
 function monsterSkillToCard(skill: Skill, element: MonsterRosterEntry['element']): Card {
   return {

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { Element, GearSlot, ItemDef, MageState } from '@/types';
 import { CARD_SOCKET_SLOTS, ITEMS_BY_ID, RARITY_COLOR, SOUL_SOCKET_SLOT } from '@/constants';
 import { useGameStore } from '@/stores/gameStore';
+import { useEscapeToClose } from '@/hooks/useEscapeToClose';
 
 const SLOT_NAME: Record<GearSlot, string> = {
   head: 'Headgear', robe: 'Robe', cape: 'Cape', weapon: 'Staff (Weapon)', acc1: 'Necklace', acc2: 'Accessory',
@@ -20,6 +21,7 @@ interface CardSocketSheetProps {
  *  the Card/Soul Crystal itself is the entry point. */
 export function CardSocketSheet({ item, el, mage, onClose }: CardSocketSheetProps) {
   const socketItem = useGameStore((s) => s.socketItem);
+  useEscapeToClose(!!item, onClose);
 
   if (!item) return null;
   const slots: GearSlot[] = item.category === 'card' ? CARD_SOCKET_SLOTS : item.category === 'soul' ? [SOUL_SOCKET_SLOT] : [];

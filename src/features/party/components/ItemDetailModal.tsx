@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import type { ItemDef } from '@/types';
 import { ELEMENT_META, RARITY_COLOR, RARITY_LABEL, STAT_META, type StatKey } from '@/constants';
+import { useEscapeToClose } from '@/hooks/useEscapeToClose';
 
 const CATEGORY_LABEL: Record<ItemDef['category'], string> = {
   consumable: 'Consumable', equipment: 'Equipment', loot: 'Etc', soul: 'Soul Crystal', card: 'Card',
@@ -26,6 +27,7 @@ interface ItemDetailModalProps {
  *  browsers don't reliably fire contextmenu/dblclick from touch, so those
  *  are no longer load-bearing for any interaction here. */
 export function ItemDetailModal({ item, qty, hasIdentifyScroll, onClose, onSocket, onIdentify }: ItemDetailModalProps) {
+  useEscapeToClose(!!item, onClose);
   if (!item) return null;
   const unidentified = item.identified === false;
   const statEntries = (Object.keys(item.statBonus ?? {}) as StatKey[]).filter((k) => item.statBonus?.[k]);

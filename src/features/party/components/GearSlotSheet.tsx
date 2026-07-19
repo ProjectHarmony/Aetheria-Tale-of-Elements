@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { Element, GearSlot, MageState } from '@/types';
 import { CARD_SOCKET_SLOTS, ITEMS_BY_ID, RARITY_COLOR, SOUL_SOCKET_SLOT } from '@/constants';
 import { useGameStore } from '@/stores/gameStore';
+import { useEscapeToClose } from '@/hooks/useEscapeToClose';
 
 const SLOT_META: Record<GearSlot, { name: string; icon: string }> = {
   head: { name: 'Headgear', icon: '🪖' },
@@ -29,6 +30,7 @@ export function GearSlotSheet({ slot, el, mage, onClose }: GearSlotSheetProps) {
   const equipItem = useGameStore((s) => s.equipItem);
   const unequipItem = useGameStore((s) => s.unequipItem);
   const unsocketItem = useGameStore((s) => s.unsocketItem);
+  useEscapeToClose(!!slot, onClose);
 
   if (!slot) return null;
   const meta = SLOT_META[slot];

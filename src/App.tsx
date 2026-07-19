@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useGameStore } from '@/stores/gameStore';
+import { useMapStore } from '@/stores/mapStore';
 import { AuthPage } from '@/features/auth';
 import { ServerSelectPage } from '@/features/serverSelect';
 import { CharacterSelectPage } from '@/features/characterSelect';
@@ -21,6 +22,12 @@ function RequireAccount({ children }: { children: ReactNode }) {
 function RequireParty({ children }: { children: ReactNode }) {
   const user = useGameStore((s) => s.user);
   const party = useGameStore((s) => s.party);
+  // Runs once per page load, the first time any of Hub/Party/Map mounts —
+  // a no-op unless the previous session left a fight unresolved (tab
+  // backgrounded/killed mid-battle-animation), see recoverFromOrphanedEncounter.
+  useEffect(() => {
+    useMapStore.getState().recoverFromOrphanedEncounter();
+  }, []);
   if (!user) return <Navigate to="/auth" replace />;
   if (!party) return <Navigate to="/roster" replace />;
   return <>{children}</>;
